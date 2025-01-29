@@ -1,12 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { games, bingoCards } from "@db/schema";
+import { games, bingoCards, users } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { createCanvas, loadImage } from "canvas";
 import fs from "fs/promises";
 import path from "path";
 import archiver from "archiver";
+import { requireAuth, requireAdmin, hashPassword, comparePasswords, type AuthenticatedRequest } from "./auth";
 
 // Хранилище уже использованных комбинаций для текущей игры
 const usedCombinations = new Set<string>();
@@ -21,23 +22,18 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 function generateBingoCard(artists: string[], cardNumber: number, hasHeart: boolean): string[] {
-  // Генерируем уникальную комбинацию исполнителей
   let grid: string[];
   let gridKey: string;
 
   do {
     const shuffled = shuffleArray(artists);
     grid = shuffled.slice(0, 36);
-    gridKey = grid.sort().join(','); // Сортируем для правильного сравнения
+    gridKey = grid.sort().join(','); 
   } while (usedCombinations.has(gridKey));
 
-  // Сохраняем использованную комбинацию
   usedCombinations.add(gridKey);
-
-  // Перемешиваем grid обратно, так как мы его отсортировали для сравнения
   grid = shuffleArray(grid);
 
-  // Если включена опция с сердечком, добавляем его к случайному исполнителю
   if (hasHeart) {
     const randomIndex = Math.floor(Math.random() * grid.length);
     grid[randomIndex] = `❤️ ${grid[randomIndex]} ❤️`;
@@ -49,7 +45,6 @@ function generateBingoCard(artists: string[], cardNumber: number, hasHeart: bool
 async function generateCardImage(artists: string[], cardNumber: number): Promise<Buffer> {
   const templatePath = path.join(process.cwd(), 'attached_assets', 'bez_kletok.png');
 
-  // Проверяем существование шаблона
   try {
     await fs.access(templatePath);
   } catch (error) {
@@ -57,27 +52,22 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
     throw new Error('Template file not found');
   }
 
-  // Загружаем шаблон
   const template = await loadImage(templatePath);
   console.log('Template loaded, size:', template.width, 'x', template.height);
 
-  // Создаем canvas с размерами шаблона
   const canvas = createCanvas(template.width, template.height);
   const ctx = canvas.getContext('2d');
 
-  // Рисуем шаблон
   ctx.drawImage(template, 0, 0);
 
-  // Определяем размеры и положение сетки исполнителей
-  const gridStartX = template.width * 0.1; // 10% от левого края
-  const gridStartY = template.height * 0.25; // 25% от верхнего края
-  const gridWidth = template.width * 0.8; // 80% ширины
-  const gridHeight = template.height * 0.6; // 60% высоты
+  const gridStartX = template.width * 0.1; 
+  const gridStartY = template.height * 0.25; 
+  const gridWidth = template.width * 0.8; 
+  const gridHeight = template.height * 0.6; 
 
   const cellWidth = gridWidth / 6;
   const cellHeight = gridHeight / 6;
 
-  // Добавляем исполнителей
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -89,16 +79,15 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
         const cellCenterX = gridStartX + (j + 0.5) * cellWidth;
         const cellCenterY = gridStartY + (i + 0.5) * cellHeight;
 
-        // Разбиваем текст на строки если нужно
         const words = artist.split(' ');
         let lines = [''];
         let currentLine = 0;
 
-        ctx.font = 'bold 64px Arial'; // Увеличили размер шрифта с 32px до 64px
+        ctx.font = 'bold 64px Arial'; 
         words.forEach(word => {
           const testLine = lines[currentLine] + (lines[currentLine] ? ' ' : '') + word;
           const metrics = ctx.measureText(testLine);
-          if (metrics.width > cellWidth - 40) { // Увеличили отступ с 20 до 40 для большего шрифта
+          if (metrics.width > cellWidth - 40) { 
             currentLine++;
             lines[currentLine] = word;
           } else {
@@ -106,18 +95,15 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
           }
         });
 
-        // Рисуем текст
-        const lineHeight = 72; // Увеличили высоту строки с 36 до 72
+        const lineHeight = 72; 
         const totalHeight = lines.length * lineHeight;
         const textStartY = cellCenterY - (totalHeight / 2);
 
         lines.forEach((line, lineIndex) => {
           const y = textStartY + lineIndex * lineHeight;
-          // Белая обводка для лучшей читаемости
           ctx.strokeStyle = 'white';
-          ctx.lineWidth = 8; // Увеличили толщину обводки с 4 до 8 для лучшей читаемости
+          ctx.lineWidth = 8; 
           ctx.strokeText(line, cellCenterX, y);
-          // Текст
           ctx.fillStyle = 'black';
           ctx.fillText(line, cellCenterX, y);
         });
@@ -125,7 +111,6 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
     }
   }
 
-  // Добавляем номер карточки
   ctx.font = 'bold 28px Arial';
   ctx.fillStyle = 'black';
   ctx.textAlign = 'center';
@@ -139,9 +124,73 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
 export function registerRoutes(app: Express): Server {
   const httpServer = createServer(app);
 
-  // Create new game
-  app.post("/api/games", async (req, res) => {
+  // Authentication Routes
+  app.post("/api/auth/login", async (req, res) => {
+    const { username, password } = req.body;
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.username, username)
+    });
+
+    if (!user || !(await comparePasswords(password, user.password))) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    (req.session as any).userId = user.id;
+    (req.session as any).isAdmin = user.isAdmin;
+
+    res.json({ 
+      id: user.id,
+      username: user.username,
+      isAdmin: user.isAdmin 
+    });
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy(() => {
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  // User management routes (admin only)
+  app.get("/api/users", requireAdmin, async (req, res) => {
+    const allUsers = await db.query.users.findMany({
+      columns: {
+        password: false,
+      }
+    });
+    res.json(allUsers);
+  });
+
+  app.post("/api/users", requireAdmin, async (req, res) => {
+    const { username, password, isAdmin } = req.body;
+
+    const existingUser = await db.query.users.findFirst({
+      where: eq(users.username, username)
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+
+    const hashedPassword = await hashPassword(password);
+    const [user] = await db.insert(users).values({
+      username,
+      password: hashedPassword,
+      isAdmin: !!isAdmin
+    }).returning({
+      id: users.id,
+      username: users.username,
+      isAdmin: users.isAdmin,
+    });
+
+    res.json(user);
+  });
+
+  // Protected game routes
+  app.post("/api/games", requireAuth, async (req: AuthenticatedRequest, res) => {
     const { name, cardCount, artists, hasHeart } = req.body;
+    const userId = req.session.userId!;
 
     const artistList = artists.split('\n').map((a: string) => a.trim()).filter(Boolean);
 
@@ -149,17 +198,16 @@ export function registerRoutes(app: Express): Server {
       return res.status(400).json({ message: "Need at least 36 artists for a 6x6 grid" });
     }
 
-    // Очищаем Set с использованными комбинациями перед генерацией новой игры
     usedCombinations.clear();
 
     const [game] = await db.insert(games).values({
+      userId,
       name,
       cardCount,
       artists: artistList,
       hasHeart: !!hasHeart,
     }).returning();
 
-    // Generate bingo cards
     const cardsToInsert = [];
     for (let i = 1; i <= cardCount; i++) {
       const grid = generateBingoCard(artistList, i, !!hasHeart);
@@ -176,27 +224,35 @@ export function registerRoutes(app: Express): Server {
     res.json(game);
   });
 
-  // Get all games
-  app.get("/api/games", async (req, res) => {
-    const allGames = await db.select().from(games);
-    res.json(allGames);
+  // Get all games for the logged-in user
+  app.get("/api/games", requireAuth, async (req: AuthenticatedRequest, res) => {
+    const userId = req.session.userId!;
+    const userGames = await db.query.games.findMany({
+      where: eq(games.userId, userId)
+    });
+    res.json(userGames);
   });
 
-  // Get specific game
-  app.get("/api/games/:id", async (req, res) => {
+  // Get specific game (only if owned by the user)
+  app.get("/api/games/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
+    const userId = req.session.userId!;
     const game = await db.query.games.findFirst({
-      where: eq(games.id, parseInt(req.params.id)),
+      where: eq(games.id, parseInt(req.params.id))
     });
 
     if (!game) {
       return res.status(404).json({ message: "Game not found" });
     }
 
+    if (game.userId !== userId && !req.session.isAdmin) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     res.json(game);
   });
 
   // Generate and download cards
-  app.get("/api/games/:id/cards", async (req, res) => {
+  app.get("/api/games/:id/cards", requireAuth, async (req: AuthenticatedRequest, res) => {
     console.log('Starting cards download for game:', req.params.id);
 
     try {
@@ -232,7 +288,6 @@ export function registerRoutes(app: Express): Server {
 
       archive.pipe(res);
 
-      // Generate and add card images to archive
       for (const card of cards) {
         console.log('Generating image for card:', card.cardNumber);
         const imageBuffer = await generateCardImage(card.grid, card.cardNumber);
@@ -255,7 +310,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Get game statistics
-  app.post("/api/games/:id/stats", async (req, res) => {
+  app.post("/api/games/:id/stats", requireAuth, async (req: AuthenticatedRequest, res) => {
     const { selectedArtists, excludedCards = [] } = req.body;
     const game = await db.query.games.findFirst({
       where: eq(games.id, parseInt(req.params.id)),
@@ -264,11 +319,9 @@ export function registerRoutes(app: Express): Server {
 
     const cards = await db.select().from(bingoCards).where(eq(bingoCards.gameId, game.id));
 
-    // Информация по каждой карточке
     const cardStats = cards
-      .filter(card => !excludedCards.includes(card.cardNumber)) // Исключаем карточки
+      .filter(card => !excludedCards.includes(card.cardNumber)) 
       .map(card => {
-        // Очищаем имена исполнителей от эмодзи сердечка для сравнения
         const cleanGrid = card.grid.map(artist =>
           artist.replace(/❤️ /g, '').replace(/ ❤️/g, '')
         );
@@ -280,7 +333,6 @@ export function registerRoutes(app: Express): Server {
         };
       });
 
-    // Сортируем карточки по количеству оставшихся исполнителей
     cardStats.sort((a, b) => a.remainingCount - b.remainingCount);
 
     const stats = {
