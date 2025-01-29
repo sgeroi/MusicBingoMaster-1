@@ -48,8 +48,19 @@ function generateBingoCard(artists: string[], cardNumber: number, hasHeart: bool
 }
 
 async function generateCardImage(artists: string[], cardNumber: number): Promise<Buffer> {
+  const templatePath = path.join(process.cwd(), 'attached_assets', 'bez_kletok.png');
+
+  // Проверяем существование шаблона
+  try {
+    await fs.access(templatePath);
+  } catch (error) {
+    console.error('Template file not found:', templatePath);
+    throw new Error('Template file not found');
+  }
+
   // Загружаем шаблон
-  const template = await loadImage(path.join(process.cwd(), 'attached_assets', 'bez_kletok.png'));
+  const template = await loadImage(templatePath);
+  console.log('Template loaded, size:', template.width, 'x', template.height);
 
   // Создаем canvas с размерами шаблона
   const canvas = createCanvas(template.width, template.height);
@@ -124,7 +135,6 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
   const numberY = template.height * 0.12;
   ctx.fillText(`${cardNumber}`, numberX, numberY);
 
-  // Возвращаем буфер с изображением
   return canvas.toBuffer();
 }
 
@@ -193,41 +203,66 @@ export function registerRoutes(app: Express): Server {
 
   // Generate and download cards
   app.get("/api/games/:id/cards", async (req, res) => {
+    console.log('Starting cards generation for game:', req.params.id);
+
     try {
       const game = await db.query.games.findFirst({
         where: eq(games.id, parseInt(req.params.id)),
       });
-      if (!game) return res.status(404).json({ message: "Game not found" });
+
+      if (!game) {
+        console.error('Game not found:', req.params.id);
+        return res.status(404).json({ message: "Game not found" });
+      }
+
+      console.log('Found game:', game.id, 'Getting cards...');
 
       const cards = await db.select().from(bingoCards).where(eq(bingoCards.gameId, game.id));
+      console.log('Found cards:', cards.length);
 
+      // Устанавливаем заголовки ответа
       res.setHeader('Content-Type', 'application/zip');
       res.setHeader('Content-Disposition', `attachment; filename=bingo-cards-game-${game.id}.zip`);
 
+      // Создаем архив
       const archive = archiver('zip', {
         zlib: { level: 9 } // Максимальная компрессия
+      });
+
+      // Подключаем обработчики событий архива
+      archive.on('error', (err) => {
+        console.error('Archiver error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ message: "Error creating archive" });
+        }
+      });
+
+      archive.on('end', () => {
+        console.log('Archive finalized successfully');
       });
 
       // Отправляем архив в response
       archive.pipe(res);
 
-      // Обработка ошибок архива
-      archive.on('error', (err) => {
-        throw err;
-      });
-
       // Генерируем и добавляем карточки в архив
+      console.log('Starting to generate card images...');
       for (const card of cards) {
+        console.log('Generating card:', card.cardNumber);
         const imageBuffer = await generateCardImage(card.grid, card.cardNumber);
         archive.append(imageBuffer, { name: `card-${card.cardNumber}.png` });
       }
 
-      // Финализируем архив
+      console.log('Finalizing archive...');
       await archive.finalize();
+      console.log('Archive finalized and sent');
+
     } catch (error) {
       console.error('Error generating cards:', error);
       if (!res.headersSent) {
-        res.status(500).json({ message: "Error generating cards" });
+        res.status(500).json({ 
+          message: "Error generating cards",
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
     }
   });
