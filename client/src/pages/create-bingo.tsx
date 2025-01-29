@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Download, Loader2, Play, Trash } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Image from "next/image";
 
 interface Game {
   id: number;
@@ -19,11 +21,19 @@ interface Game {
   createdAt: string;
 }
 
+interface Template {
+  id: number;
+  name: string;
+  imagePath: string;
+  isDefault: boolean;
+}
+
 interface GameForm {
   name: string;
   cardCount: number;
   artists: string;
   hasHeart: boolean;
+  templateId: number;
 }
 
 export default function CreateBingoPage() {
@@ -32,12 +42,17 @@ export default function CreateBingoPage() {
   const [downloading, setDownloading] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
 
+  const { data: templates } = useQuery<Template[]>({
+    queryKey: ["/api/templates"],
+  });
+
   const form = useForm<GameForm>({
     defaultValues: {
       name: "",
       cardCount: 1,
       artists: "",
-      hasHeart: false
+      hasHeart: false,
+      templateId: 1 // Default template ID
     }
   });
 
@@ -178,6 +193,24 @@ export default function CreateBingoPage() {
                     min: 1
                   })}
                 />
+              </div>
+
+              <div>
+                <Select
+                  onValueChange={(value) => form.setValue("templateId", parseInt(value))}
+                  defaultValue={String(form.getValues("templateId"))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Выберите шаблон" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates?.map((template) => (
+                      <SelectItem key={template.id} value={String(template.id)}>
+                        {template.name} {template.isDefault && "(основной)"}
+                        </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>

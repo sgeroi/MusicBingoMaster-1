@@ -1,13 +1,16 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { games, bingoCards, users } from "@db/schema";
+import { games, bingoCards, users, templates } from "@db/schema"; // Added templates import
 import { eq, or } from "drizzle-orm";
 import { createCanvas, loadImage } from "canvas";
 import fs from "fs/promises";
 import path from "path";
 import archiver from "archiver";
 import { requireAuth, requireAdmin, hashPassword, comparePasswords, type AuthenticatedRequest } from "./auth";
+import multer from "multer";
+import { mkdir } from "fs/promises";
+
 
 // Хранилище уже использованных комбинаций для текущей игры
 const usedCombinations = new Set<string>();
@@ -28,7 +31,7 @@ function generateBingoCard(artists: string[], cardNumber: number, hasHeart: bool
   do {
     const shuffled = shuffleArray(artists);
     grid = shuffled.slice(0, 36);
-    gridKey = grid.sort().join(','); 
+    gridKey = grid.sort().join(',');
   } while (usedCombinations.has(gridKey));
 
   usedCombinations.add(gridKey);
@@ -42,84 +45,123 @@ function generateBingoCard(artists: string[], cardNumber: number, hasHeart: bool
   return grid;
 }
 
-async function generateCardImage(artists: string[], cardNumber: number): Promise<Buffer> {
-  const templatePath = path.join(process.cwd(), 'attached_assets', 'bez_kletok.png');
-
-  try {
-    await fs.access(templatePath);
-  } catch (error) {
-    console.error('Template file not found:', templatePath);
-    throw new Error('Template file not found');
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: async function (req, file, cb) {
+    const uploadDir = path.join(process.cwd(), 'uploads', 'templates');
+    await mkdir(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
   }
+});
 
-  const template = await loadImage(templatePath);
-  console.log('Template loaded, size:', template.width, 'x', template.height);
+const upload = multer({ storage: storage });
 
-  const canvas = createCanvas(template.width, template.height);
-  const ctx = canvas.getContext('2d');
+async function generateCardImage(artists: string[], cardNumber: number, templateId: number): Promise<Buffer> {
+    const template = await db.query.templates.findFirst({
+      where: eq(templates.id, templateId)
+    });
 
-  ctx.drawImage(template, 0, 0);
+    if (!template) {
+      throw new Error('Template not found');
+    }
 
-  const gridStartX = template.width * 0.1; 
-  const gridStartY = template.height * 0.25; 
-  const gridWidth = template.width * 0.8; 
-  const gridHeight = template.height * 0.6; 
+    const templatePath = template.imagePath;
+    const templateImage = await loadImage(templatePath);
 
-  const cellWidth = gridWidth / 6;
-  const cellHeight = gridHeight / 6;
+    const canvas = createCanvas(templateImage.width, templateImage.height);
+    const ctx = canvas.getContext('2d');
 
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+    // Draw template
+    ctx.drawImage(templateImage, 0, 0);
 
-  for (let i = 0; i < 6; i++) {
-    for (let j = 0; j < 6; j++) {
-      const index = i * 6 + j;
-      const artist = artists[index];
-      if (artist) {
-        const cellCenterX = gridStartX + (j + 0.5) * cellWidth;
-        const cellCenterY = gridStartY + (i + 0.5) * cellHeight;
+    // Grid settings
+    const gridStartX = templateImage.width * 0.1;
+    const gridStartY = templateImage.height * 0.25;
+    const gridWidth = templateImage.width * 0.8;
+    const gridHeight = templateImage.height * 0.6;
 
-        const words = artist.split(' ');
-        let lines = [''];
-        let currentLine = 0;
+    const cellWidth = gridWidth / 6;
+    const cellHeight = gridHeight / 6;
 
-        ctx.font = 'bold 64px Arial'; 
-        words.forEach(word => {
-          const testLine = lines[currentLine] + (lines[currentLine] ? ' ' : '') + word;
-          const metrics = ctx.measureText(testLine);
-          if (metrics.width > cellWidth - 40) { 
-            currentLine++;
-            lines[currentLine] = word;
-          } else {
-            lines[currentLine] = testLine;
-          }
-        });
+    // Draw grid lines
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 2;
 
-        const lineHeight = 72; 
-        const totalHeight = lines.length * lineHeight;
-        const textStartY = cellCenterY - (totalHeight / 2);
+    // Vertical lines
+    for (let i = 0; i <= 6; i++) {
+      ctx.beginPath();
+      ctx.moveTo(gridStartX + i * cellWidth, gridStartY);
+      ctx.lineTo(gridStartX + i * cellWidth, gridStartY + gridHeight);
+      ctx.stroke();
+    }
 
-        lines.forEach((line, lineIndex) => {
-          const y = textStartY + lineIndex * lineHeight;
-          ctx.strokeStyle = 'white';
-          ctx.lineWidth = 8; 
-          ctx.strokeText(line, cellCenterX, y);
-          ctx.fillStyle = 'black';
-          ctx.fillText(line, cellCenterX, y);
-        });
+    // Horizontal lines
+    for (let i = 0; i <= 6; i++) {
+      ctx.beginPath();
+      ctx.moveTo(gridStartX, gridStartY + i * cellHeight);
+      ctx.lineTo(gridStartX + gridWidth, gridStartY + i * cellHeight);
+      ctx.stroke();
+    }
+
+    // Draw artists
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (let i = 0; i < 6; i++) {
+      for (let j = 0; j < 6; j++) {
+        const index = i * 6 + j;
+        const artist = artists[index];
+        if (artist) {
+          const cellCenterX = gridStartX + (j + 0.5) * cellWidth;
+          const cellCenterY = gridStartY + (i + 0.5) * cellHeight;
+
+          const words = artist.split(' ');
+          let lines = [''];
+          let currentLine = 0;
+
+          ctx.font = 'bold 64px Arial';
+          words.forEach(word => {
+            const testLine = lines[currentLine] + (lines[currentLine] ? ' ' : '') + word;
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > cellWidth - 40) {
+              currentLine++;
+              lines[currentLine] = word;
+            } else {
+              lines[currentLine] = testLine;
+            }
+          });
+
+          const lineHeight = 72;
+          const totalHeight = lines.length * lineHeight;
+          const textStartY = cellCenterY - (totalHeight / 2);
+
+          lines.forEach((line, lineIndex) => {
+            const y = textStartY + lineIndex * lineHeight;
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 8;
+            ctx.strokeText(line, cellCenterX, y);
+            ctx.fillStyle = 'black';
+            ctx.fillText(line, cellCenterX, y);
+          });
+        }
       }
     }
+
+    // Draw card number (2x larger)
+    ctx.font = 'bold 56px Arial'; // Doubled from 28px
+    ctx.fillStyle = 'black';
+    ctx.textAlign = 'center';
+    const numberX = templateImage.width * 0.85;
+    const numberY = templateImage.height * 0.12;
+    ctx.fillText(`${cardNumber}`, numberX, numberY);
+
+    return canvas.toBuffer();
   }
 
-  ctx.font = 'bold 28px Arial';
-  ctx.fillStyle = 'black';
-  ctx.textAlign = 'center';
-  const numberX = template.width * 0.85;
-  const numberY = template.height * 0.12;
-  ctx.fillText(`${cardNumber}`, numberX, numberY);
-
-  return canvas.toBuffer();
-}
 
 export function registerRoutes(app: Express): Server {
   const httpServer = createServer(app);
@@ -139,10 +181,10 @@ export function registerRoutes(app: Express): Server {
     (req.session as any).userId = user.id;
     (req.session as any).isAdmin = user.isAdmin;
 
-    res.json({ 
+    res.json({
       id: user.id,
       username: user.username,
-      isAdmin: user.isAdmin 
+      isAdmin: user.isAdmin
     });
   });
 
@@ -189,7 +231,7 @@ export function registerRoutes(app: Express): Server {
 
   // Protected game routes
   app.post("/api/games", requireAuth, async (req: AuthenticatedRequest, res) => {
-    const { name, cardCount, artists, hasHeart } = req.body;
+    const { name, cardCount, artists, hasHeart, templateId = 1 } = req.body; // Added templateId with default
     const userId = req.session.userId!;
 
     const artistList = artists.split('\n').map((a: string) => a.trim()).filter(Boolean);
@@ -206,6 +248,7 @@ export function registerRoutes(app: Express): Server {
       cardCount,
       artists: artistList,
       hasHeart: !!hasHeart,
+      templateId: templateId // Added templateId to game
     }).returning();
 
     const cardsToInsert = [];
@@ -340,7 +383,7 @@ export function registerRoutes(app: Express): Server {
 
       for (const card of cards) {
         console.log('Generating image for card:', card.cardNumber);
-        const imageBuffer = await generateCardImage(card.grid, card.cardNumber);
+        const imageBuffer = await generateCardImage(card.grid, card.cardNumber, game.templateId); // Use game.templateId
         archive.append(imageBuffer, { name: `card-${card.cardNumber}.png` });
       }
 
@@ -370,7 +413,7 @@ export function registerRoutes(app: Express): Server {
     const cards = await db.select().from(bingoCards).where(eq(bingoCards.gameId, game.id));
 
     const cardStats = cards
-      .filter(card => !excludedCards.includes(card.cardNumber)) 
+      .filter(card => !excludedCards.includes(card.cardNumber))
       .map(card => {
         const cleanGrid = card.grid.map(artist =>
           artist.replace(/❤️ /g, '').replace(/ ❤️/g, '')
@@ -397,6 +440,34 @@ export function registerRoutes(app: Express): Server {
     };
 
     res.json(stats);
+  });
+
+
+  // Template management routes (admin only)
+  app.get("/api/templates", requireAuth, async (req, res) => {
+    const allTemplates = await db.query.templates.findMany({
+      orderBy: (templates, { desc }) => [desc(templates.createdAt)],
+    });
+    res.json(allTemplates);
+  });
+
+  app.post("/api/templates", requireAdmin, upload.single('template'), async (req: AuthenticatedRequest, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ message: "Template name is required" });
+    }
+
+    const [template] = await db.insert(templates).values({
+      name,
+      imagePath: req.file.path,
+      isDefault: false,
+    }).returning();
+
+    res.json(template);
   });
 
   return httpServer;

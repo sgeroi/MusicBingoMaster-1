@@ -12,10 +12,20 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Templates table
+export const templates = pgTable("templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  imagePath: text("image_path").notNull(),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Games table with user relation
 export const games = pgTable("games", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id),
+  templateId: integer("template_id").notNull().references(() => templates.id),
   name: text("name").notNull(),
   cardCount: integer("card_count").notNull(),
   artists: text("artists").array().notNull(),
@@ -40,6 +50,14 @@ export const gamesRelations = relations(games, ({ one }) => ({
     fields: [games.userId],
     references: [users.id],
   }),
+  template: one(templates, {
+    fields: [games.templateId],
+    references: [templates.id],
+  }),
+}));
+
+export const templatesRelations = relations(templates, ({ many }) => ({
+  games: many(games),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -58,6 +76,11 @@ export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export type User = InferModel<typeof users>;
 export type NewUser = InferModel<typeof users, "insert">;
+
+export const insertTemplateSchema = createInsertSchema(templates);
+export const selectTemplateSchema = createSelectSchema(templates);
+export type Template = InferModel<typeof templates>;
+export type NewTemplate = InferModel<typeof templates, "insert">;
 
 export const insertGameSchema = createInsertSchema(games);
 export const selectGameSchema = createSelectSchema(games);
