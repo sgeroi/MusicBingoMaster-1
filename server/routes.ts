@@ -60,6 +60,31 @@ async function generateCardImage(artists: string[], cardNumber: number, heartPos
       const index = i * 6 + j;
       const artist = artists[index];
       if (artist) {
+        // Если это позиция для сердечка, рисуем его
+        if (heartPosition === index) {
+          const cellCenterX = (j + 0.5) * (800/6);
+          const cellCenterY = (i + 0.5) * (800/6);
+
+          ctx.fillStyle = 'red';
+          ctx.beginPath();
+
+          // Увеличенное сердечко в центре ячейки
+          const heartSize = 30; // Увеличиваем размер сердечка
+          ctx.moveTo(cellCenterX, cellCenterY + heartSize/2);
+          ctx.bezierCurveTo(
+            cellCenterX - heartSize/2, cellCenterY, 
+            cellCenterX - heartSize/2, cellCenterY - heartSize/2, 
+            cellCenterX, cellCenterY - heartSize/2
+          );
+          ctx.bezierCurveTo(
+            cellCenterX + heartSize/2, cellCenterY - heartSize/2, 
+            cellCenterX + heartSize/2, cellCenterY, 
+            cellCenterX, cellCenterY + heartSize/2
+          );
+          ctx.fill();
+          ctx.fillStyle = 'black'; // Возвращаем черный цвет для текста
+        }
+
         // Разбиваем длинный текст на строки
         const words = artist.split(' ');
         let lines = [''];
@@ -75,22 +100,6 @@ async function generateCardImage(artists: string[], cardNumber: number, heartPos
             lines[currentLine] = testLine;
           }
         });
-
-        // Если это позиция для сердечка, рисуем его
-        if (heartPosition === index) {
-          // Рисуем маленькое сердечко в верхнем правом углу ячейки
-          const heartX = (j + 1) * (800/6) - 20;
-          const heartY = i * (800/6) + 20;
-
-          ctx.fillStyle = 'red';
-          ctx.beginPath();
-          // Рисуем сердечко с помощью кривых Безье
-          ctx.moveTo(heartX, heartY + 5);
-          ctx.bezierCurveTo(heartX - 5, heartY, heartX - 5, heartY - 5, heartX, heartY - 5);
-          ctx.bezierCurveTo(heartX + 5, heartY - 5, heartX + 5, heartY, heartX, heartY + 5);
-          ctx.fill();
-          ctx.fillStyle = 'black'; // Возвращаем черный цвет для текста
-        }
 
         // Отрисовка текста с переносом строк
         const lineHeight = 20;
@@ -111,7 +120,7 @@ async function generateCardImage(artists: string[], cardNumber: number, heartPos
     }
   }
 
-  // Add card number in the corner with subtle background
+  // Add card number
   ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
   ctx.fillRect(5, 5, 45, 25);
   ctx.fillStyle = 'white';
