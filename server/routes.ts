@@ -25,48 +25,75 @@ function generateBingoCard(artists: string[], cardNumber: number): string[] {
 async function generateCardImage(artists: string[], cardNumber: number): Promise<Buffer> {
   const canvas = createCanvas(800, 800);
   const ctx = canvas.getContext('2d');
-  
+
   // White background
   ctx.fillStyle = 'white';
   ctx.fillRect(0, 0, 800, 800);
-  
+
   // Grid lines
   ctx.strokeStyle = 'black';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1;
   for (let i = 0; i <= 6; i++) {
     ctx.beginPath();
     ctx.moveTo(i * (800/6), 0);
     ctx.lineTo(i * (800/6), 800);
     ctx.stroke();
-    
+
     ctx.beginPath();
     ctx.moveTo(0, i * (800/6));
     ctx.lineTo(800, i * (800/6));
     ctx.stroke();
   }
-  
+
   // Add artists
-  ctx.font = '16px Arial';
+  ctx.font = '14px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  
+
+  const cellWidth = 800/6 - 10; // Оставляем отступы по краям
+
   for (let i = 0; i < 6; i++) {
     for (let j = 0; j < 6; j++) {
       const artist = artists[i * 6 + j];
-      ctx.fillText(
-        artist,
-        (j + 0.5) * (800/6),
-        (i + 0.5) * (800/6),
-        800/6 - 10
-      );
+      if (artist) {
+        // Функция для переноса длинного текста на несколько строк
+        const words = artist.split(' ');
+        let lines = [''];
+        let currentLine = 0;
+
+        words.forEach(word => {
+          const testLine = lines[currentLine] + (lines[currentLine] ? ' ' : '') + word;
+          const metrics = ctx.measureText(testLine);
+          if (metrics.width > cellWidth) {
+            currentLine++;
+            lines[currentLine] = word;
+          } else {
+            lines[currentLine] = testLine;
+          }
+        });
+
+        // Отрисовка текста с переносом строк
+        lines.forEach((line, lineIndex) => {
+          ctx.fillText(
+            line,
+            (j + 0.5) * (800/6),
+            (i + 0.5) * (800/6) + (lineIndex - lines.length/2 + 0.5) * 20,
+            cellWidth
+          );
+        });
+      }
     }
   }
-  
-  // Add card number
+
+  // Add card number with black background for better visibility
+  ctx.fillStyle = 'black';
+  ctx.fillRect(10, 10, 80, 40);
+  ctx.fillStyle = 'white';
   ctx.font = 'bold 24px Arial';
-  ctx.fillText(`#${cardNumber}`, 60, 30);
-  
-  return canvas.toBuffer();
+  ctx.textAlign = 'left';
+  ctx.fillText(`#${cardNumber}`, 20, 35);
+
+  return canvas.toBuffer('image/jpeg');
 }
 
 export function registerRoutes(app: Express): Server {
