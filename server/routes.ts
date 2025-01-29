@@ -41,7 +41,6 @@ function generateBingoCard(artists: string[], cardNumber: number, hasHeart: bool
   if (hasHeart) {
     const randomIndex = Math.floor(Math.random() * grid.length);
     grid[randomIndex] = `❤️ ${grid[randomIndex]} ❤️`;
-    console.log(`Card ${cardNumber}: Added hearts to artist at index ${randomIndex}: ${grid[randomIndex]}`);
   }
 
   return grid;
@@ -81,7 +80,6 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
   // Добавляем исполнителей
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#000000';
 
   for (let i = 0; i < 6; i++) {
     for (let j = 0; j < 6; j++) {
@@ -96,11 +94,11 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
         let lines = [''];
         let currentLine = 0;
 
-        ctx.font = 'bold 16px Arial';
+        ctx.font = 'bold 32px Arial'; // Увеличили размер шрифта с 16px до 32px
         words.forEach(word => {
           const testLine = lines[currentLine] + (lines[currentLine] ? ' ' : '') + word;
           const metrics = ctx.measureText(testLine);
-          if (metrics.width > cellWidth - 10) {
+          if (metrics.width > cellWidth - 20) { // Увеличили отступ с 10 до 20 для большего шрифта
             currentLine++;
             lines[currentLine] = word;
           } else {
@@ -109,7 +107,7 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
         });
 
         // Рисуем текст
-        const lineHeight = 18;
+        const lineHeight = 36; // Увеличили высоту строки с 18 до 36
         const totalHeight = lines.length * lineHeight;
         const textStartY = cellCenterY - (totalHeight / 2);
 
@@ -117,7 +115,7 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
           const y = textStartY + lineIndex * lineHeight;
           // Белая обводка для лучшей читаемости
           ctx.strokeStyle = 'white';
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 4; // Увеличили толщину обводки с 3 до 4 для лучшей читаемости
           ctx.strokeText(line, cellCenterX, y);
           // Текст
           ctx.fillStyle = 'black';
@@ -144,7 +142,6 @@ export function registerRoutes(app: Express): Server {
   // Create new game
   app.post("/api/games", async (req, res) => {
     const { name, cardCount, artists, hasHeart } = req.body;
-    console.log("Creating new game with hasHeart:", hasHeart);
 
     const artistList = artists.split('\n').map((a: string) => a.trim()).filter(Boolean);
 
@@ -170,7 +167,7 @@ export function registerRoutes(app: Express): Server {
         gameId: game.id,
         cardNumber: i,
         grid,
-        heartPosition: null, // Больше не используется, так как сердечко добавляется к имени исполнителя
+        heartPosition: null,
       });
     }
 
@@ -187,23 +184,20 @@ export function registerRoutes(app: Express): Server {
 
   // Get specific game
   app.get("/api/games/:id", async (req, res) => {
-    console.log("Getting game with id:", req.params.id); // Debug log
     const game = await db.query.games.findFirst({
       where: eq(games.id, parseInt(req.params.id)),
     });
 
     if (!game) {
-      console.log("Game not found"); // Debug log
       return res.status(404).json({ message: "Game not found" });
     }
 
-    console.log("Found game:", game); // Debug log
     res.json(game);
   });
 
   // Generate and download cards
   app.get("/api/games/:id/cards", async (req, res) => {
-    console.log('Starting cards generation for game:', req.params.id);
+    console.log('Starting cards download for game:', req.params.id);
 
     try {
       const game = await db.query.games.findFirst({
@@ -215,21 +209,16 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ message: "Game not found" });
       }
 
-      console.log('Found game:', game.id, 'Getting cards...');
-
       const cards = await db.select().from(bingoCards).where(eq(bingoCards.gameId, game.id));
       console.log('Found cards:', cards.length);
 
-      // Устанавливаем заголовки ответа
       res.setHeader('Content-Type', 'application/zip');
       res.setHeader('Content-Disposition', `attachment; filename=bingo-cards-game-${game.id}.zip`);
 
-      // Создаем архив
       const archive = archiver('zip', {
-        zlib: { level: 9 } // Максимальная компрессия
+        zlib: { level: 9 }
       });
 
-      // Подключаем обработчики событий архива
       archive.on('error', (err) => {
         console.error('Archiver error:', err);
         if (!res.headersSent) {
@@ -241,13 +230,11 @@ export function registerRoutes(app: Express): Server {
         console.log('Archive finalized successfully');
       });
 
-      // Отправляем архив в response
       archive.pipe(res);
 
-      // Генерируем и добавляем карточки в архив
-      console.log('Starting to generate card images...');
+      // Generate and add card images to archive
       for (const card of cards) {
-        console.log('Generating card:', card.cardNumber);
+        console.log('Generating image for card:', card.cardNumber);
         const imageBuffer = await generateCardImage(card.grid, card.cardNumber);
         archive.append(imageBuffer, { name: `card-${card.cardNumber}.png` });
       }
@@ -257,10 +244,10 @@ export function registerRoutes(app: Express): Server {
       console.log('Archive finalized and sent');
 
     } catch (error) {
-      console.error('Error generating cards:', error);
+      console.error('Error downloading cards:', error);
       if (!res.headersSent) {
-        res.status(500).json({ 
-          message: "Error generating cards",
+        res.status(500).json({
+          message: "Error downloading cards",
           error: error instanceof Error ? error.message : 'Unknown error'
         });
       }
