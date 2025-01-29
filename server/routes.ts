@@ -17,13 +17,21 @@ function shuffleArray<T>(array: T[]): T[] {
   return newArray;
 }
 
-function generateBingoCard(artists: string[], cardNumber: number): string[] {
+function generateBingoCard(artists: string[], cardNumber: number, hasHeart: boolean): string[] {
   // Randomly shuffle artists and take first 36 for the grid
   const shuffled = shuffleArray(artists);
-  return shuffled.slice(0, 36); // 6x6 grid needs 36 artists
+  const grid = shuffled.slice(0, 36);
+
+  // If hasHeart is true, add heart emoji to a random artist
+  if (hasHeart) {
+    const randomIndex = Math.floor(Math.random() * grid.length);
+    grid[randomIndex] = `❤️ ${grid[randomIndex]}`;
+  }
+
+  return grid;
 }
 
-async function generateCardImage(artists: string[], cardNumber: number, heartPosition: number | null = null): Promise<Buffer> {
+async function generateCardImage(artists: string[], cardNumber: number): Promise<Buffer> {
   const canvas = createCanvas(800, 800);
   const ctx = canvas.getContext('2d');
 
@@ -46,7 +54,7 @@ async function generateCardImage(artists: string[], cardNumber: number, heartPos
     ctx.stroke();
   }
 
-  // Add artists and hearts
+  // Add artists
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -57,12 +65,6 @@ async function generateCardImage(artists: string[], cardNumber: number, heartPos
       if (artist) {
         const cellCenterX = (j + 0.5) * (800/6);
         const cellCenterY = (i + 0.5) * (800/6);
-
-        // Draw heart emoji if this is the selected position
-        if (heartPosition === index) {
-          ctx.font = '24px Arial';
-          ctx.fillText('❤️', cellCenterX, cellCenterY - 15);
-        }
 
         // Draw artist name
         ctx.font = '16px Arial';
@@ -85,7 +87,7 @@ async function generateCardImage(artists: string[], cardNumber: number, heartPos
         // Draw text lines
         const lineHeight = 20;
         const totalHeight = lines.length * lineHeight;
-        const startY = cellCenterY + (heartPosition === index ? 10 : 0); // Adjust Y if there's a heart
+        const startY = cellCenterY;
 
         lines.forEach((line, lineIndex) => {
           const y = startY + (lineIndex * lineHeight) - (totalHeight / 2);
@@ -132,14 +134,12 @@ export function registerRoutes(app: Express): Server {
     // Generate bingo cards
     const cardsToInsert = [];
     for (let i = 1; i <= cardCount; i++) {
-      const grid = generateBingoCard(artistList, i);
-      // Устанавливаем heartPosition только если hasHeart = true
-      const heartPosition = hasHeart ? Math.floor(Math.random() * 36) : null;
+      const grid = generateBingoCard(artistList, i, hasHeart);
       cardsToInsert.push({
         gameId: game.id,
         cardNumber: i,
         grid,
-        heartPosition,
+        heartPosition: null, // Больше не используется, так как сердечко добавляется к имени исполнителя
       });
     }
 
@@ -184,7 +184,7 @@ export function registerRoutes(app: Express): Server {
     archive.pipe(res);
 
     for (const card of cards) {
-      const imageBuffer = await generateCardImage(card.grid, card.cardNumber, card.heartPosition);
+      const imageBuffer = await generateCardImage(card.grid, card.cardNumber);
       archive.append(imageBuffer, { name: `card-${card.cardNumber}.jpg` });
     }
 
@@ -205,7 +205,9 @@ export function registerRoutes(app: Express): Server {
     const cardStats = cards
       .filter(card => !excludedCards.includes(card.cardNumber)) // Исключаем карточки
       .map(card => {
-        const remaining = card.grid.filter(artist => !selectedArtists.includes(artist)).length;
+        // Очищаем имена исполнителей от эмодзи сердечка для сравнения
+        const cleanGrid = card.grid.map(artist => artist.replace('❤️ ', ''));
+        const remaining = cleanGrid.filter(artist => !selectedArtists.includes(artist)).length;
         return {
           cardNumber: card.cardNumber,
           remainingCount: remaining,
