@@ -8,6 +8,9 @@ import fs from "fs/promises";
 import path from "path";
 import archiver from "archiver";
 
+// Хранилище уже использованных комбинаций для текущей игры
+const usedCombinations = new Set<string>();
+
 function shuffleArray<T>(array: T[]): T[] {
   const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
@@ -18,15 +21,27 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 function generateBingoCard(artists: string[], cardNumber: number, hasHeart: boolean): string[] {
-  // Randomly shuffle artists and take first 36 for the grid
-  const shuffled = shuffleArray(artists);
-  const grid = shuffled.slice(0, 36);
+  // Генерируем уникальную комбинацию исполнителей
+  let grid: string[];
+  let gridKey: string;
 
-  // If hasHeart is true, add heart emoji to a random artist
+  do {
+    const shuffled = shuffleArray(artists);
+    grid = shuffled.slice(0, 36);
+    gridKey = grid.sort().join(','); // Сортируем для правильного сравнения
+  } while (usedCombinations.has(gridKey));
+
+  // Сохраняем использованную комбинацию
+  usedCombinations.add(gridKey);
+
+  // Перемешиваем grid обратно, так как мы его отсортировали для сравнения
+  grid = shuffleArray(grid);
+
+  // Если включена опция с сердечком, добавляем его к случайному исполнителю
   if (hasHeart) {
     const randomIndex = Math.floor(Math.random() * grid.length);
-    grid[randomIndex] = `❤️ ${grid[randomIndex]}`;
-    console.log(`Card ${cardNumber}: Added heart to artist at index ${randomIndex}: ${grid[randomIndex]}`);
+    grid[randomIndex] = `❤️ ${grid[randomIndex]} ❤️`;
+    console.log(`Card ${cardNumber}: Added hearts to artist at index ${randomIndex}: ${grid[randomIndex]}`);
   }
 
   return grid;
@@ -127,11 +142,14 @@ export function registerRoutes(app: Express): Server {
       return res.status(400).json({ message: "Need at least 36 artists for a 6x6 grid" });
     }
 
+    // Очищаем Set с использованными комбинациями перед генерацией новой игры
+    usedCombinations.clear();
+
     const [game] = await db.insert(games).values({
       name,
       cardCount,
       artists: artistList,
-      hasHeart: !!hasHeart, // Убедимся, что сохраняем булево значение
+      hasHeart: !!hasHeart,
     }).returning();
 
     // Generate bingo cards
@@ -209,7 +227,9 @@ export function registerRoutes(app: Express): Server {
       .filter(card => !excludedCards.includes(card.cardNumber)) // Исключаем карточки
       .map(card => {
         // Очищаем имена исполнителей от эмодзи сердечка для сравнения
-        const cleanGrid = card.grid.map(artist => artist.replace('❤️ ', ''));
+        const cleanGrid = card.grid.map(artist =>
+          artist.replace(/❤️ /g, '').replace(/ ❤️/g, '')
+        );
         const remaining = cleanGrid.filter(artist => !selectedArtists.includes(artist)).length;
         return {
           cardNumber: card.cardNumber,
@@ -222,16 +242,13 @@ export function registerRoutes(app: Express): Server {
     cardStats.sort((a, b) => a.remainingCount - b.remainingCount);
 
     const stats = {
-      // Все карточки с количеством оставшихся исполнителей
       cards: cardStats.map(stat => ({
         cardNumber: stat.cardNumber,
         remaining: stat.remainingCount
       })),
-      // Победители (все исполнители зачеркнуты)
       winners: cardStats
         .filter(stat => stat.isComplete)
         .map(stat => stat.cardNumber),
-      // Общая статистика
       totalCards: cardStats.length
     };
 
