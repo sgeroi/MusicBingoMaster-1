@@ -190,25 +190,38 @@ export function registerRoutes(app: Express): Server {
     if (!game) return res.status(404).json({ message: "Game not found" });
 
     const cards = await db.select().from(bingoCards).where(eq(bingoCards.gameId, game.id));
-    
-    const stats = {
-      totalMatches: 0,
-      fiveRemaining: 0,
-      threeRemaining: 0,
-      oneRemaining: 0,
-      winners: [] as number[],
-    };
 
-    for (const card of cards) {
-      const matches = card.grid.filter(artist => selectedArtists.includes(artist)).length;
-      if (matches > 0) stats.totalMatches++;
-      
-      const remaining = 36 - matches;
-      if (remaining === 5) stats.fiveRemaining++;
-      if (remaining === 3) stats.threeRemaining++;
-      if (remaining === 1) stats.oneRemaining++;
-      if (remaining === 0) stats.winners.push(card.cardNumber);
-    }
+    // Информация по каждой карточке
+    const cardStats = cards.map(card => {
+      const remaining = card.grid.filter(artist => !selectedArtists.includes(artist)).length;
+      return {
+        cardNumber: card.cardNumber,
+        remainingCount: remaining,
+        isComplete: remaining === 0
+      };
+    });
+
+    // Сортируем карточки по количеству оставшихся исполнителей
+    cardStats.sort((a, b) => a.remainingCount - b.remainingCount);
+
+    const stats = {
+      // Карточки, близкие к победе (5 или меньше оставшихся)
+      closeToWin: cardStats
+        .filter(stat => stat.remainingCount <= 5 && stat.remainingCount > 0)
+        .map(stat => ({
+          cardNumber: stat.cardNumber,
+          remaining: stat.remainingCount
+        })),
+      // Победители (все исполнители зачеркнуты)
+      winners: cardStats
+        .filter(stat => stat.isComplete)
+        .map(stat => stat.cardNumber),
+      // Общая статистика
+      totalCards: cards.length,
+      averageRemaining: Math.round(
+        cardStats.reduce((sum, stat) => sum + stat.remainingCount, 0) / cards.length
+      )
+    };
 
     res.json(stats);
   });
