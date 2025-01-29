@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Download, Loader2, Play, Trash } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Image from "next/image";
+import { TourGuide } from "@/components/tour-guide";
+import { useTutorial } from "@/hooks/use-tutorial";
 
 interface Game {
   id: number;
@@ -166,17 +168,64 @@ export default function CreateBingoPage() {
     }
   };
 
+  const { hasCompletedTutorial, completeTutorial } = useTutorial();
+
+  const tourSteps = [
+    {
+      title: "Создание новой игры",
+      description: "Здесь вы можете создать новую игру бинго. Давайте пройдем все шаги вместе!",
+      targetId: "create-game-form"
+    },
+    {
+      title: "Название игры",
+      description: "Введите уникальное название для вашей игры бинго",
+      targetId: "game-name-input"
+    },
+    {
+      title: "Количество карточек",
+      description: "Укажите, сколько карточек нужно создать для игры",
+      targetId: "card-count-input"
+    },
+    {
+      title: "Выбор шаблона",
+      description: "Выберите шаблон для оформления карточек",
+      targetId: "template-select"
+    },
+    {
+      title: "Список исполнителей",
+      description: "Введите список исполнителей, по одному в каждой строке. Нужно минимум 36 исполнителей для заполнения карточки",
+      targetId: "artists-input"
+    },
+    {
+      title: "Специальные ячейки",
+      description: "Включите эту опцию, чтобы добавить случайное сердечко на каждую карточку",
+      targetId: "heart-checkbox"
+    },
+    {
+      title: "Список игр",
+      description: "Здесь будут отображаться все созданные вами игры",
+      targetId: "games-list"
+    }
+  ];
+
   return (
     <div className="container mx-auto py-8">
+      {!hasCompletedTutorial && (
+        <TourGuide
+          steps={tourSteps}
+          onComplete={completeTutorial}
+        />
+      )}
       <div className="grid gap-8">
         <Card>
           <CardHeader>
             <CardTitle>Создать новую игру бинго</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={onSubmit} className="space-y-4">
+            <form id="create-game-form" onSubmit={onSubmit} className="space-y-4">
               <div>
                 <Input
+                  id="game-name-input"
                   placeholder="Название игры"
                   {...form.register("name", { required: true })}
                 />
@@ -184,6 +233,7 @@ export default function CreateBingoPage() {
 
               <div>
                 <Input
+                  id="card-count-input"
                   type="number"
                   placeholder="Количество карточек"
                   min="1"
@@ -197,6 +247,7 @@ export default function CreateBingoPage() {
 
               <div>
                 <Select
+                  id="template-select"
                   onValueChange={(value) => form.setValue("templateId", parseInt(value))}
                   defaultValue={String(form.getValues("templateId"))}
                 >
@@ -207,7 +258,7 @@ export default function CreateBingoPage() {
                     {templates?.map((template) => (
                       <SelectItem key={template.id} value={String(template.id)}>
                         {template.name} {template.isDefault && "(основной)"}
-                        </SelectItem>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -215,6 +266,7 @@ export default function CreateBingoPage() {
 
               <div>
                 <Textarea
+                  id="artists-input"
                   placeholder="Введите исполнителей (по одному в строке)"
                   className="min-h-[200px]"
                   {...form.register("artists", { required: true })}
@@ -223,11 +275,11 @@ export default function CreateBingoPage() {
 
               <div className="flex items-center space-x-2">
                 <Checkbox
-                  id="hasHeart"
+                  id="heart-checkbox"
                   {...form.register("hasHeart")}
                 />
                 <label
-                  htmlFor="hasHeart"
+                  htmlFor="heart-checkbox"
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
                   Добавить случайное сердечко на каждую карточку
@@ -246,67 +298,69 @@ export default function CreateBingoPage() {
             <CardTitle>Ваши игры</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Название</TableHead>
-                  <TableHead>Карточки</TableHead>
-                  <TableHead>Создано</TableHead>
-                  <TableHead>Действия</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {games?.map((game) => (
-                  <TableRow key={game.id}>
-                    <TableCell>{game.id}</TableCell>
-                    <TableCell>{game.name}</TableCell>
-                    <TableCell>{game.cardCount}</TableCell>
-                    <TableCell>
-                      {new Date(game.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          onClick={() => handleStartGame(game.id)}
-                        >
-                          <Play className="w-4 h-4 mr-2" />
-                          Запустить
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => downloadCards(game.id)}
-                          disabled={downloading === game.id}
-                        >
-                          {downloading === game.id ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Download className="w-4 h-4 mr-2" />
-                          )}
-                          {downloading === game.id ? 'Скачивание...' : 'Скачать'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDeleteGame(game.id)}
-                          disabled={deleting === game.id}
-                        >
-                          {deleting === game.id ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Trash className="w-4 h-4 mr-2" />
-                          )}
-                          {deleting === game.id ? 'Удаление...' : 'Удалить'}
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div id="games-list">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Название</TableHead>
+                    <TableHead>Карточки</TableHead>
+                    <TableHead>Создано</TableHead>
+                    <TableHead>Действия</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {games?.map((game) => (
+                    <TableRow key={game.id}>
+                      <TableCell>{game.id}</TableCell>
+                      <TableCell>{game.name}</TableCell>
+                      <TableCell>{game.cardCount}</TableCell>
+                      <TableCell>
+                        {new Date(game.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => handleStartGame(game.id)}
+                          >
+                            <Play className="w-4 h-4 mr-2" />
+                            Запустить
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => downloadCards(game.id)}
+                            disabled={downloading === game.id}
+                          >
+                            {downloading === game.id ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <Download className="w-4 h-4 mr-2" />
+                            )}
+                            {downloading === game.id ? 'Скачивание...' : 'Скачать'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDeleteGame(game.id)}
+                            disabled={deleting === game.id}
+                          >
+                            {deleting === game.id ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <Trash className="w-4 h-4 mr-2" />
+                            )}
+                            {deleting === game.id ? 'Удаление...' : 'Удалить'}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       </div>
