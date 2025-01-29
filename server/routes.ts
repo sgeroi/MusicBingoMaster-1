@@ -252,6 +252,32 @@ export function registerRoutes(app: Express): Server {
     res.json(game);
   });
 
+  // Delete specific game
+  app.delete("/api/games/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
+    const userId = req.session.userId!;
+    const gameId = parseInt(req.params.id);
+
+    const game = await db.query.games.findFirst({
+      where: eq(games.id, gameId)
+    });
+
+    if (!game) {
+      return res.status(404).json({ message: "Game not found" });
+    }
+
+    if (game.userId !== userId && !req.session.isAdmin) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // Delete associated bingo cards first
+    await db.delete(bingoCards).where(eq(bingoCards.gameId, gameId));
+
+    // Then delete the game
+    await db.delete(games).where(eq(games.id, gameId));
+
+    res.json({ message: "Game deleted successfully" });
+  });
+
   // Generate and download cards
   app.get("/api/games/:id/cards", requireAuth, async (req: AuthenticatedRequest, res) => {
     console.log('Starting cards download for game:', req.params.id);

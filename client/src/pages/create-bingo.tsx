@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, Play, Trash } from "lucide-react";
+
+interface Game {
+  id: number;
+  name: string;
+  cardCount: number;
+  artists: string[];
+  createdAt: string;
+}
 
 interface GameForm {
   name: string;
@@ -19,7 +28,9 @@ interface GameForm {
 
 export default function CreateBingoPage() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [downloading, setDownloading] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
 
   const form = useForm<GameForm>({
     defaultValues: {
@@ -65,9 +76,46 @@ export default function CreateBingoPage() {
     },
   });
 
+  const deleteGame = useMutation({
+    mutationFn: async (gameId: number) => {
+      const res = await fetch(`/api/games/${gameId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Game deleted successfully",
+      });
+      refetch();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete game",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = form.handleSubmit((data: GameForm) => {
     createGame.mutate(data);
   });
+
+  const handleStartGame = (gameId: number) => {
+    navigate(`/?gameId=${gameId}`);
+  };
+
+  const handleDeleteGame = async (gameId: number) => {
+    try {
+      setDeleting(gameId);
+      await deleteGame.mutateAsync(gameId);
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   const downloadCards = async (gameId: number) => {
     try {
@@ -185,19 +233,42 @@ export default function CreateBingoPage() {
                       {new Date(game.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => downloadCards(game.id)}
-                        disabled={downloading === game.id}
-                      >
-                        {downloading === game.id ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Download className="w-4 h-4 mr-2" />
-                        )}
-                        {downloading === game.id ? 'Downloading...' : 'Download Cards'}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => handleStartGame(game.id)}
+                        >
+                          <Play className="w-4 h-4 mr-2" />
+                          Start Game
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => downloadCards(game.id)}
+                          disabled={downloading === game.id}
+                        >
+                          {downloading === game.id ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4 mr-2" />
+                          )}
+                          {downloading === game.id ? 'Downloading...' : 'Download'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDeleteGame(game.id)}
+                          disabled={deleting === game.id}
+                        >
+                          {deleting === game.id ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Trash className="w-4 h-4 mr-2" />
+                          )}
+                          {deleting === game.id ? 'Deleting...' : 'Delete'}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

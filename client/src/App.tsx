@@ -63,12 +63,6 @@ function Navigation() {
           </Button>
         )}
         <Button
-          variant={location === "/" ? "default" : "outline"}
-          onClick={() => navigate("/")}
-        >
-          Play Game
-        </Button>
-        <Button
           variant="outline"
           onClick={handleLogout}
           className="ml-auto"
