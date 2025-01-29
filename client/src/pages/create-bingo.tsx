@@ -105,7 +105,7 @@ export default function CreateBingoPage() {
   });
 
   const handleStartGame = (gameId: number) => {
-    navigate(`/?gameId=${gameId}`);
+    navigate(`/game/${gameId}`);
   };
 
   const handleDeleteGame = async (gameId: number) => {
@@ -172,10 +172,10 @@ export default function CreateBingoPage() {
                   type="number"
                   placeholder="Количество карточек"
                   min="1"
-                  {...form.register("cardCount", { 
+                  {...form.register("cardCount", {
                     required: true,
                     valueAsNumber: true,
-                    min: 1 
+                    min: 1
                   })}
                 />
               </div>

@@ -91,6 +91,9 @@ function Router() {
         <Route path="/create" component={(props) => (
           <ProtectedRoute component={CreateBingoPage} {...props} />
         )} />
+        <Route path="/game/:id" component={(props) => (
+          <ProtectedRoute component={GamePage} {...props} />
+        )} />
         <Route path="/" component={() => (
           <Redirect to={user?.isAdmin ? "/admin" : "/create"} />
         )} />
