@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { db } from "@db";
 import { games, bingoCards } from "@db/schema";
 import { eq } from "drizzle-orm";
-import { createCanvas } from "canvas";
+import { createCanvas, loadImage } from "canvas";
 import fs from "fs/promises";
 import path from "path";
 import archiver from "archiver";
@@ -48,51 +48,48 @@ function generateBingoCard(artists: string[], cardNumber: number, hasHeart: bool
 }
 
 async function generateCardImage(artists: string[], cardNumber: number): Promise<Buffer> {
-  const canvas = createCanvas(800, 800);
+  // Загружаем шаблон
+  const template = await loadImage(path.join(process.cwd(), 'attached_assets', 'bez_kletok.png'));
+
+  // Создаем canvas с размерами шаблона
+  const canvas = createCanvas(template.width, template.height);
   const ctx = canvas.getContext('2d');
 
-  // White background
-  ctx.fillStyle = 'white';
-  ctx.fillRect(0, 0, 800, 800);
+  // Рисуем шаблон
+  ctx.drawImage(template, 0, 0);
 
-  // Grid lines
-  ctx.strokeStyle = 'black';
-  ctx.lineWidth = 2;
-  for (let i = 0; i <= 6; i++) {
-    ctx.beginPath();
-    ctx.moveTo(i * (800/6), 0);
-    ctx.lineTo(i * (800/6), 800);
-    ctx.stroke();
+  // Определяем размеры и положение сетки исполнителей
+  const gridStartX = template.width * 0.1; // 10% от левого края
+  const gridStartY = template.height * 0.25; // 25% от верхнего края
+  const gridWidth = template.width * 0.8; // 80% ширины
+  const gridHeight = template.height * 0.6; // 60% высоты
 
-    ctx.beginPath();
-    ctx.moveTo(0, i * (800/6));
-    ctx.lineTo(800, i * (800/6));
-    ctx.stroke();
-  }
+  const cellWidth = gridWidth / 6;
+  const cellHeight = gridHeight / 6;
 
-  // Add artists
+  // Добавляем исполнителей
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#000000';
 
   for (let i = 0; i < 6; i++) {
     for (let j = 0; j < 6; j++) {
       const index = i * 6 + j;
       const artist = artists[index];
       if (artist) {
-        const cellCenterX = (j + 0.5) * (800/6);
-        const cellCenterY = (i + 0.5) * (800/6);
+        const cellCenterX = gridStartX + (j + 0.5) * cellWidth;
+        const cellCenterY = gridStartY + (i + 0.5) * cellHeight;
 
-        // Draw artist name
-        ctx.font = '16px Arial';
-        // Разбиваем длинный текст на строки
+        // Разбиваем текст на строки если нужно
         const words = artist.split(' ');
         let lines = [''];
         let currentLine = 0;
 
+        ctx.font = 'bold 16px Arial';
         words.forEach(word => {
           const testLine = lines[currentLine] + (lines[currentLine] ? ' ' : '') + word;
           const metrics = ctx.measureText(testLine);
-          if (metrics.width > 800/6 - 20) {
+          if (metrics.width > cellWidth - 10) {
             currentLine++;
             lines[currentLine] = word;
           } else {
@@ -100,16 +97,18 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
           }
         });
 
-        // Draw text lines
-        const lineHeight = 20;
+        // Рисуем текст
+        const lineHeight = 18;
         const totalHeight = lines.length * lineHeight;
-        const startY = cellCenterY;
+        const textStartY = cellCenterY - (totalHeight / 2);
 
         lines.forEach((line, lineIndex) => {
-          const y = startY + (lineIndex * lineHeight) - (totalHeight / 2);
+          const y = textStartY + lineIndex * lineHeight;
+          // Белая обводка для лучшей читаемости
           ctx.strokeStyle = 'white';
           ctx.lineWidth = 3;
           ctx.strokeText(line, cellCenterX, y);
+          // Текст
           ctx.fillStyle = 'black';
           ctx.fillText(line, cellCenterX, y);
         });
@@ -117,15 +116,15 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
     }
   }
 
-  // Add card number
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-  ctx.fillRect(5, 5, 45, 25);
-  ctx.fillStyle = 'white';
-  ctx.font = 'bold 16px Arial';
+  // Добавляем номер карточки
+  ctx.font = 'bold 28px Arial';
+  ctx.fillStyle = 'black';
   ctx.textAlign = 'center';
-  ctx.fillText(`#${cardNumber}`, 27, 22);
+  const numberX = template.width * 0.85; // Позиция номера справа вверху
+  const numberY = template.height * 0.12;
+  ctx.fillText(`${cardNumber}`, numberX, numberY);
 
-  return canvas.toBuffer('image/jpeg', { quality: 0.95 });
+  return canvas.toBuffer('image/png', { quality: 1 });
 }
 
 export function registerRoutes(app: Express): Server {
