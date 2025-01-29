@@ -133,6 +133,7 @@ export function registerRoutes(app: Express): Server {
     const cardsToInsert = [];
     for (let i = 1; i <= cardCount; i++) {
       const grid = generateBingoCard(artistList, i);
+      // Устанавливаем heartPosition только если hasHeart = true
       const heartPosition = hasHeart ? Math.floor(Math.random() * 36) : null;
       cardsToInsert.push({
         gameId: game.id,
