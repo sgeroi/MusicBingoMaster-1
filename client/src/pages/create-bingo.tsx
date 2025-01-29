@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,11 +23,14 @@ export default function CreateBingoPage() {
 
   const form = useForm<GameForm>({
     defaultValues: {
+      name: "",
+      cardCount: 1,
+      artists: "",
       hasHeart: false
     }
   });
 
-  const { data: games, refetch } = useQuery({
+  const { data: games, refetch } = useQuery<Game[]>({
     queryKey: ["/api/games"],
   });
 
@@ -55,13 +59,13 @@ export default function CreateBingoPage() {
     onError: (error) => {
       toast({
         title: "Error",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Failed to create game",
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = form.handleSubmit((data) => {
+  const onSubmit = form.handleSubmit((data: GameForm) => {
     createGame.mutate(data);
   });
 
@@ -172,7 +176,7 @@ export default function CreateBingoPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {games?.map((game: any) => (
+                {games?.map((game) => (
                   <TableRow key={game.id}>
                     <TableCell>{game.id}</TableCell>
                     <TableCell>{game.name}</TableCell>
