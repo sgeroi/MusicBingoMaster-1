@@ -18,9 +18,9 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 function generateBingoCard(artists: string[], cardNumber: number): string[] {
-  // Sort artists alphabetically first
-  const sortedArtists = [...artists].sort((a, b) => a.localeCompare(b));
-  return sortedArtists.slice(0, 36); // 6x6 grid needs 36 artists
+  // Randomly shuffle artists and take first 36 for the grid
+  const shuffled = shuffleArray(artists);
+  return shuffled.slice(0, 36); // 6x6 grid needs 36 artists
 }
 
 async function generateCardImage(artists: string[], cardNumber: number, heartPosition: number | null = null): Promise<Buffer> {
