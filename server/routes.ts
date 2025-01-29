@@ -228,7 +228,8 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/games", requireAuth, async (req: AuthenticatedRequest, res) => {
     const userId = req.session.userId!;
     const userGames = await db.query.games.findMany({
-      where: eq(games.userId, userId)
+      where: eq(games.userId, userId),
+      orderBy: (games, { desc }) => [desc(games.createdAt)],
     });
     res.json(userGames);
   });

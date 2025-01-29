@@ -1,11 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { GameStats } from "@/components/game-stats";
 import { ArtistGrid } from "@/components/artist-grid";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface Game {
   id: number;
@@ -17,18 +21,59 @@ interface Game {
 }
 
 export default function GamePage() {
+  const { toast } = useToast();
   const [selectedGame, setSelectedGame] = useState<string>();
   const [selectedArtists, setSelectedArtists] = useState<string[]>([]);
   const [gameStarted, setGameStarted] = useState(false);
   const [excludedCards, setExcludedCards] = useState<string>("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [newGameData, setNewGameData] = useState({
+    name: "",
+    cardCount: 1,
+    artists: "",
+    hasHeart: false
+  });
 
-  const { data: games } = useQuery<Game[]>({
+  const { data: games, refetch } = useQuery<Game[]>({
     queryKey: ["/api/games"],
   });
 
   const { data: currentGame } = useQuery<Game>({
     queryKey: [`/api/games/${selectedGame}`],
     enabled: !!selectedGame,
+  });
+
+  const createGame = useMutation({
+    mutationFn: async (data: typeof newGameData) => {
+      const res = await fetch("/api/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Game created successfully",
+      });
+      setCreateDialogOpen(false);
+      refetch();
+      setNewGameData({
+        name: "",
+        cardCount: 1,
+        artists: "",
+        hasHeart: false
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create game",
+        variant: "destructive",
+      });
+    },
   });
 
   const { data: gameStats, mutate: updateStats } = useMutation({
@@ -52,7 +97,6 @@ export default function GamePage() {
         ? prev.filter((a) => a !== artist)
         : [...prev, artist];
 
-      // Update stats after selection changes
       if (selectedGame) {
         updateStats();
       }
@@ -74,15 +118,70 @@ export default function GamePage() {
     setGameStarted(true);
   };
 
+  const handleCreateGame = (e: React.FormEvent) => {
+    e.preventDefault();
+    createGame.mutate(newGameData);
+  };
+
   return (
     <div className="container mx-auto py-8">
       <div className="grid gap-8">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Music Bingo Game</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4 items-center">
+            <div className="flex gap-4">
+              <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>Create New Game</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create New Game</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateGame} className="space-y-4">
+                    <Input
+                      placeholder="Game Name"
+                      value={newGameData.name}
+                      onChange={(e) => setNewGameData(prev => ({ ...prev, name: e.target.value }))}
+                      required
+                    />
+                    <Input
+                      type="number"
+                      placeholder="Number of Cards"
+                      min="1"
+                      value={newGameData.cardCount}
+                      onChange={(e) => setNewGameData(prev => ({ ...prev, cardCount: parseInt(e.target.value) }))}
+                      required
+                    />
+                    <Textarea
+                      placeholder="Enter artists (one per line)"
+                      value={newGameData.artists}
+                      onChange={(e) => setNewGameData(prev => ({ ...prev, artists: e.target.value }))}
+                      className="min-h-[200px]"
+                      required
+                    />
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="hasHeart"
+                        checked={newGameData.hasHeart}
+                        onCheckedChange={(checked) => 
+                          setNewGameData(prev => ({ ...prev, hasHeart: checked as boolean }))
+                        }
+                      />
+                      <label
+                        htmlFor="hasHeart"
+                        className="text-sm font-medium leading-none"
+                      >
+                        Add random heart to each card
+                      </label>
+                    </div>
+                    <Button type="submit" disabled={createGame.isPending}>
+                      {createGame.isPending ? "Creating..." : "Create Game"}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
               <Select
                 value={selectedGame}
                 onValueChange={(value) => {
@@ -110,7 +209,7 @@ export default function GamePage() {
                 </Button>
               )}
             </div>
-          </CardContent>
+          </CardHeader>
         </Card>
 
         {selectedGame && gameStarted && currentGame && (
