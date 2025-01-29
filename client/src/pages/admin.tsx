@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Download } from "lucide-react";
@@ -13,12 +14,17 @@ interface GameForm {
   name: string;
   cardCount: number;
   artists: string;
+  hasHeart: boolean;
 }
 
 export default function AdminPage() {
   const { toast } = useToast();
-  const form = useForm<GameForm>();
-  
+  const form = useForm<GameForm>({
+    defaultValues: {
+      hasHeart: false
+    }
+  });
+
   const { data: games, refetch } = useQuery({
     queryKey: ["/api/games"],
   });
@@ -73,7 +79,7 @@ export default function AdminPage() {
                   {...form.register("name", { required: true })}
                 />
               </div>
-              
+
               <div>
                 <Input
                   type="number"
@@ -86,7 +92,7 @@ export default function AdminPage() {
                   })}
                 />
               </div>
-              
+
               <div>
                 <Textarea
                   placeholder="Enter artists (one per line)"
@@ -94,7 +100,20 @@ export default function AdminPage() {
                   {...form.register("artists", { required: true })}
                 />
               </div>
-              
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="hasHeart"
+                  {...form.register("hasHeart")}
+                />
+                <label
+                  htmlFor="hasHeart"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Add random heart to each card
+                </label>
+              </div>
+
               <Button type="submit" disabled={createGame.isPending}>
                 Create Game
               </Button>

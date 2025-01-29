@@ -18,11 +18,12 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 function generateBingoCard(artists: string[], cardNumber: number): string[] {
-  const shuffled = shuffleArray(artists);
-  return shuffled.slice(0, 36); // 6x6 grid needs 36 artists
+  // Sort artists alphabetically first
+  const sortedArtists = [...artists].sort((a, b) => a.localeCompare(b));
+  return sortedArtists.slice(0, 36); // 6x6 grid needs 36 artists
 }
 
-async function generateCardImage(artists: string[], cardNumber: number): Promise<Buffer> {
+async function generateCardImage(artists: string[], cardNumber: number, heartPosition: number | null = null): Promise<Buffer> {
   const canvas = createCanvas(800, 800);
   const ctx = canvas.getContext('2d');
 
@@ -46,17 +47,18 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
   }
 
   // Add artists
-  ctx.fillStyle = 'black'; // Явно задаем цвет текста
-  ctx.font = 'bold 16px Arial'; // Увеличиваем размер и делаем жирным
+  ctx.fillStyle = 'black';
+  ctx.font = 'bold 16px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  const cellWidth = 800/6 - 20; // Увеличиваем отступы по краям
+  const cellWidth = 800/6 - 20;
   const cellHeight = 800/6;
 
   for (let i = 0; i < 6; i++) {
     for (let j = 0; j < 6; j++) {
-      const artist = artists[i * 6 + j];
+      const index = i * 6 + j;
+      const artist = artists[index];
       if (artist) {
         // Разбиваем длинный текст на строки
         const words = artist.split(' ');
@@ -73,6 +75,22 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
             lines[currentLine] = testLine;
           }
         });
+
+        // Если это позиция для сердечка, рисуем его
+        if (heartPosition === index) {
+          // Рисуем маленькое сердечко в верхнем правом углу ячейки
+          const heartX = (j + 1) * (800/6) - 20;
+          const heartY = i * (800/6) + 20;
+
+          ctx.fillStyle = 'red';
+          ctx.beginPath();
+          // Рисуем сердечко с помощью кривых Безье
+          ctx.moveTo(heartX, heartY + 5);
+          ctx.bezierCurveTo(heartX - 5, heartY, heartX - 5, heartY - 5, heartX, heartY - 5);
+          ctx.bezierCurveTo(heartX + 5, heartY - 5, heartX + 5, heartY, heartX, heartY + 5);
+          ctx.fill();
+          ctx.fillStyle = 'black'; // Возвращаем черный цвет для текста
+        }
 
         // Отрисовка текста с переносом строк
         const lineHeight = 20;
@@ -109,9 +127,9 @@ export function registerRoutes(app: Express): Server {
 
   // Create new game
   app.post("/api/games", async (req, res) => {
-    const { name, cardCount, artists } = req.body;
+    const { name, cardCount, artists, hasHeart } = req.body;
     const artistList = artists.split('\n').map((a: string) => a.trim()).filter(Boolean);
-    
+
     if (artistList.length < 36) {
       return res.status(400).json({ message: "Need at least 36 artists for a 6x6 grid" });
     }
@@ -120,16 +138,19 @@ export function registerRoutes(app: Express): Server {
       name,
       cardCount,
       artists: artistList,
+      hasHeart,
     }).returning();
 
     // Generate bingo cards
     const cardsToInsert = [];
     for (let i = 1; i <= cardCount; i++) {
       const grid = generateBingoCard(artistList, i);
+      const heartPosition = hasHeart ? Math.floor(Math.random() * 36) : null;
       cardsToInsert.push({
         gameId: game.id,
         cardNumber: i,
         grid,
+        heartPosition,
       });
     }
 
@@ -174,7 +195,7 @@ export function registerRoutes(app: Express): Server {
     archive.pipe(res);
 
     for (const card of cards) {
-      const imageBuffer = await generateCardImage(card.grid, card.cardNumber);
+      const imageBuffer = await generateCardImage(card.grid, card.cardNumber, card.heartPosition);
       archive.append(imageBuffer, { name: `card-${card.cardNumber}.jpg` });
     }
 
