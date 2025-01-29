@@ -146,10 +146,17 @@ export function registerRoutes(app: Express): Server {
 
   // Get specific game
   app.get("/api/games/:id", async (req, res) => {
+    console.log("Getting game with id:", req.params.id); // Debug log
     const game = await db.query.games.findFirst({
       where: eq(games.id, parseInt(req.params.id)),
     });
-    if (!game) return res.status(404).json({ message: "Game not found" });
+
+    if (!game) {
+      console.log("Game not found"); // Debug log
+      return res.status(404).json({ message: "Game not found" });
+    }
+
+    console.log("Found game:", game); // Debug log
     res.json(game);
   });
 

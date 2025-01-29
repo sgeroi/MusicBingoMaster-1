@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ export default function GamePage() {
   });
 
   const { data: currentGame } = useQuery<Game>({
-    queryKey: ["/api/games", selectedGame],
+    queryKey: [`/api/games/${selectedGame}`],
     enabled: !!selectedGame,
   });
 
@@ -60,6 +60,13 @@ export default function GamePage() {
     setSelectedArtists([]);
     setGameStarted(true);
   };
+
+  // Debugging log
+  useEffect(() => {
+    if (currentGame) {
+      console.log("Current game data:", currentGame);
+    }
+  }, [currentGame]);
 
   return (
     <div className="container mx-auto py-8">
