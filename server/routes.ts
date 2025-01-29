@@ -194,7 +194,7 @@ export function registerRoutes(app: Express): Server {
     res.json(game);
   });
 
-  // Generate and download cards
+  // Get specific game and download cards
   app.get("/api/games/:id/cards", async (req, res) => {
     console.log('Starting cards download for game:', req.params.id);
 
@@ -211,21 +211,35 @@ export function registerRoutes(app: Express): Server {
       const cards = await db.select().from(bingoCards).where(eq(bingoCards.gameId, game.id));
       console.log('Found cards:', cards.length);
 
-      // Set headers before sending any data
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename="bingo-cards-game-${game.id}.zip"`);
-      res.setHeader('Transfer-Encoding', 'chunked');
+      // Set response headers
+      res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="bingo-cards-game-${game.id}.zip"`,
+      });
 
       const archive = archiver('zip', {
         zlib: { level: 9 }
       });
 
+      // Pipe archive data to the response
+      archive.pipe(res);
+
       // Handle archive errors
       archive.on('error', (err) => {
         console.error('Archiver error:', err);
-        if (!res.headersSent) {
-          res.status(500).json({ message: "Error creating archive" });
-        }
+        // Send error to clients via WebSocket
+        wss.clients.forEach(client => {
+          if (client.readyState === 1) {
+            client.send(JSON.stringify({
+              type: 'cardGeneration',
+              gameId: game.id,
+              status: 'error',
+              error: err.message
+            }));
+          }
+        });
+        // Clean up
+        res.end();
       });
 
       archive.on('end', () => {
@@ -242,9 +256,6 @@ export function registerRoutes(app: Express): Server {
           }
         });
       });
-
-      // Pipe archive data to the response
-      archive.pipe(res);
 
       // Generate and add card images to archive
       for (let i = 0; i < cards.length; i++) {
