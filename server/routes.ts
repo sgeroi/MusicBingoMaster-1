@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { games, bingoCards, users, templates } from "@db/schema"; // Added templates import
+import { games, bingoCards, users, templates } from "@db/schema";
 import { eq, or } from "drizzle-orm";
 import { createCanvas, loadImage } from "canvas";
 import fs from "fs/promises";
@@ -24,9 +24,10 @@ function shuffleArray<T>(array: T[]): T[] {
   return newArray;
 }
 
-function generateBingoCard(artists: string[], cardNumber: number, hasHeart: boolean): string[] {
+function generateBingoCard(artists: string[], cardNumber: number, hasHeart: boolean): { grid: string[], heartPosition: number | null } {
   let grid: string[];
   let gridKey: string;
+  let heartPosition: number | null = null;
 
   do {
     const shuffled = shuffleArray(artists);
@@ -38,11 +39,11 @@ function generateBingoCard(artists: string[], cardNumber: number, hasHeart: bool
   grid = shuffleArray(grid);
 
   if (hasHeart) {
-    const randomIndex = Math.floor(Math.random() * grid.length);
-    grid[randomIndex] = `❤️ ${grid[randomIndex]} ❤️`;
+    heartPosition = Math.floor(Math.random() * grid.length);
+    grid[heartPosition] = `❤️ ${grid[heartPosition]} ❤️`;
   }
 
-  return grid;
+  return { grid, heartPosition };
 }
 
 // Configure multer for file uploads
@@ -152,7 +153,7 @@ async function generateCardImage(artists: string[], cardNumber: number, template
     }
 
     // Draw card number (2x larger)
-    ctx.font = 'bold 56px Arial'; // Doubled from 28px
+    ctx.font = 'bold 56px Arial';
     ctx.fillStyle = 'black';
     ctx.textAlign = 'center';
     const numberX = templateImage.width * 0.85;
@@ -231,7 +232,7 @@ export function registerRoutes(app: Express): Server {
 
   // Protected game routes
   app.post("/api/games", requireAuth, async (req: AuthenticatedRequest, res) => {
-    const { name, cardCount, artists, hasHeart, templateId = 1 } = req.body; // Added templateId with default
+    const { name, cardCount, artists, hasHeart, templateId = 1 } = req.body;
     const userId = req.session.userId!;
 
     const artistList = artists.split('\n').map((a: string) => a.trim()).filter(Boolean);
@@ -247,18 +248,18 @@ export function registerRoutes(app: Express): Server {
       name,
       cardCount,
       artists: artistList,
-      hasHeart: !!hasHeart,
-      templateId: templateId // Added templateId to game
+      hasHeart,
+      templateId: templateId
     }).returning();
 
     const cardsToInsert = [];
     for (let i = 1; i <= cardCount; i++) {
-      const grid = generateBingoCard(artistList, i, !!hasHeart);
+      const { grid, heartPosition } = generateBingoCard(artistList, i, hasHeart);
       cardsToInsert.push({
         gameId: game.id,
         cardNumber: i,
         grid,
-        heartPosition: null,
+        heartPosition,
       });
     }
 
@@ -383,7 +384,7 @@ export function registerRoutes(app: Express): Server {
 
       for (const card of cards) {
         console.log('Generating image for card:', card.cardNumber);
-        const imageBuffer = await generateCardImage(card.grid, card.cardNumber, game.templateId); // Use game.templateId
+        const imageBuffer = await generateCardImage(card.grid, card.cardNumber, game.templateId);
         archive.append(imageBuffer, { name: `card-${card.cardNumber}.png` });
       }
 
