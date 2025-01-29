@@ -19,7 +19,7 @@ function ProtectedRoute({ component: Component, adminOnly = false, ...rest }: an
   }
 
   if (adminOnly && !user.isAdmin) {
-    return <Redirect to="/" />;
+    return <Redirect to="/create" />;
   }
 
   return <Component {...rest} />;
@@ -45,13 +45,13 @@ function Navigation() {
               variant={location === "/admin" ? "default" : "outline"}
               onClick={() => navigate("/admin")}
             >
-              Admin
+              Админ
             </Button>
             <Button
               variant={location === "/users" ? "default" : "outline"}
               onClick={() => navigate("/users")}
             >
-              Users
+              Пользователи
             </Button>
           </>
         ) : (
@@ -59,7 +59,7 @@ function Navigation() {
             variant={location === "/create" ? "default" : "outline"}
             onClick={() => navigate("/create")}
           >
-            Create Bingo
+            Создать Бинго
           </Button>
         )}
         <Button
@@ -67,7 +67,7 @@ function Navigation() {
           onClick={handleLogout}
           className="ml-auto"
         >
-          Logout
+          Выйти
         </Button>
       </div>
     </div>
@@ -75,6 +75,8 @@ function Navigation() {
 }
 
 function Router() {
+  const { user } = useAuth();
+
   return (
     <>
       <Navigation />
@@ -89,8 +91,8 @@ function Router() {
         <Route path="/create" component={(props) => (
           <ProtectedRoute component={CreateBingoPage} {...props} />
         )} />
-        <Route path="/" component={(props) => (
-          <ProtectedRoute component={GamePage} {...props} />
+        <Route path="/" component={() => (
+          <Redirect to={user?.isAdmin ? "/admin" : "/create"} />
         )} />
         <Route component={NotFound} />
       </Switch>

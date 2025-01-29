@@ -19,11 +19,11 @@ export default function LoginPage() {
 
     try {
       await login(username, password);
-      navigate("/");
+      navigate("/create");
     } catch (error) {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to login",
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Ошибка входа",
         variant: "destructive",
       });
     } finally {
@@ -35,14 +35,15 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-center">Login to Music Bingo</CardTitle>
+          <CardTitle className="text-center text-3xl font-bold mb-8">Бинго, плиз!</CardTitle>
+          <CardTitle className="text-center">Вход в систему</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Input
                 type="text"
-                placeholder="Username"
+                placeholder="Имя пользователя"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -51,7 +52,7 @@ export default function LoginPage() {
             <div>
               <Input
                 type="password"
-                placeholder="Password"
+                placeholder="Пароль"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -62,7 +63,7 @@ export default function LoginPage() {
               className="w-full"
               disabled={isLoading}
             >
-              {isLoading ? "Logging in..." : "Login"}
+              {isLoading ? "Вход..." : "Войти"}
             </Button>
           </form>
         </CardContent>

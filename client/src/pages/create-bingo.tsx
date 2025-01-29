@@ -61,16 +61,16 @@ export default function CreateBingoPage() {
     },
     onSuccess: () => {
       toast({
-        title: "Game Created",
-        description: "The bingo game was created successfully.",
+        title: "Успех",
+        description: "Игра успешно создана",
       });
       form.reset();
       refetch();
     },
     onError: (error) => {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create game",
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Не удалось создать игру",
         variant: "destructive",
       });
     },
@@ -86,15 +86,15 @@ export default function CreateBingoPage() {
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Game deleted successfully",
+        title: "Успех",
+        description: "Игра успешно удалена",
       });
       refetch();
     },
     onError: (error) => {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete game",
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Не удалось удалить игру",
         variant: "destructive",
       });
     },
@@ -137,13 +137,13 @@ export default function CreateBingoPage() {
       document.body.removeChild(a);
 
       toast({
-        title: "Success",
-        description: "Cards downloaded successfully",
+        title: "Успех",
+        description: "Карточки успешно скачаны",
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to download cards",
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Не удалось скачать карточки",
         variant: "destructive",
       });
     } finally {
@@ -156,13 +156,13 @@ export default function CreateBingoPage() {
       <div className="grid gap-8">
         <Card>
           <CardHeader>
-            <CardTitle>Create New Bingo Game</CardTitle>
+            <CardTitle>Создать новую игру бинго</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={onSubmit} className="space-y-4">
               <div>
                 <Input
-                  placeholder="Game Name"
+                  placeholder="Название игры"
                   {...form.register("name", { required: true })}
                 />
               </div>
@@ -170,7 +170,7 @@ export default function CreateBingoPage() {
               <div>
                 <Input
                   type="number"
-                  placeholder="Number of Cards"
+                  placeholder="Количество карточек"
                   min="1"
                   {...form.register("cardCount", { 
                     required: true,
@@ -182,7 +182,7 @@ export default function CreateBingoPage() {
 
               <div>
                 <Textarea
-                  placeholder="Enter artists (one per line)"
+                  placeholder="Введите исполнителей (по одному в строке)"
                   className="min-h-[200px]"
                   {...form.register("artists", { required: true })}
                 />
@@ -197,12 +197,12 @@ export default function CreateBingoPage() {
                   htmlFor="hasHeart"
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
-                  Add random heart to each card
+                  Добавить случайное сердечко на каждую карточку
                 </label>
               </div>
 
               <Button type="submit" disabled={createGame.isPending}>
-                Create Game
+                {createGame.isPending ? "Создание..." : "Создать игру"}
               </Button>
             </form>
           </CardContent>
@@ -210,17 +210,17 @@ export default function CreateBingoPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Your Games</CardTitle>
+            <CardTitle>Ваши игры</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>ID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Cards</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>Название</TableHead>
+                  <TableHead>Карточки</TableHead>
+                  <TableHead>Создано</TableHead>
+                  <TableHead>Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -240,7 +240,7 @@ export default function CreateBingoPage() {
                           onClick={() => handleStartGame(game.id)}
                         >
                           <Play className="w-4 h-4 mr-2" />
-                          Start Game
+                          Запустить
                         </Button>
                         <Button
                           size="sm"
@@ -253,7 +253,7 @@ export default function CreateBingoPage() {
                           ) : (
                             <Download className="w-4 h-4 mr-2" />
                           )}
-                          {downloading === game.id ? 'Downloading...' : 'Download'}
+                          {downloading === game.id ? 'Скачивание...' : 'Скачать'}
                         </Button>
                         <Button
                           size="sm"
@@ -266,7 +266,7 @@ export default function CreateBingoPage() {
                           ) : (
                             <Trash className="w-4 h-4 mr-2" />
                           )}
-                          {deleting === game.id ? 'Deleting...' : 'Delete'}
+                          {deleting === game.id ? 'Удаление...' : 'Удалить'}
                         </Button>
                       </div>
                     </TableCell>
