@@ -131,13 +131,13 @@ export function registerRoutes(app: Express): Server {
       name,
       cardCount,
       artists: artistList,
-      hasHeart,
+      hasHeart: !!hasHeart, // Убедимся, что сохраняем булево значение
     }).returning();
 
     // Generate bingo cards
     const cardsToInsert = [];
     for (let i = 1; i <= cardCount; i++) {
-      const grid = generateBingoCard(artistList, i, hasHeart);
+      const grid = generateBingoCard(artistList, i, !!hasHeart);
       cardsToInsert.push({
         gameId: game.id,
         cardNumber: i,

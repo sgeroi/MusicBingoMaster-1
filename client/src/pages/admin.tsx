@@ -31,10 +31,15 @@ export default function AdminPage() {
 
   const createGame = useMutation({
     mutationFn: async (data: GameForm) => {
+      const formData = {
+        ...data,
+        hasHeart: !!data.hasHeart, // Убедимся, что передаем булево значение
+      };
+      console.log("Sending form data:", formData); // Добавим лог
       const res = await fetch("/api/games", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(formData),
       });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
