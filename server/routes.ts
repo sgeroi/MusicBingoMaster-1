@@ -32,7 +32,7 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
 
   // Grid lines
   ctx.strokeStyle = 'black';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 2;
   for (let i = 0; i <= 6; i++) {
     ctx.beginPath();
     ctx.moveTo(i * (800/6), 0);
@@ -46,17 +46,19 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
   }
 
   // Add artists
-  ctx.font = '14px Arial';
+  ctx.fillStyle = 'black'; // Явно задаем цвет текста
+  ctx.font = 'bold 16px Arial'; // Увеличиваем размер и делаем жирным
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  const cellWidth = 800/6 - 10; // Оставляем отступы по краям
+  const cellWidth = 800/6 - 20; // Увеличиваем отступы по краям
+  const cellHeight = 800/6;
 
   for (let i = 0; i < 6; i++) {
     for (let j = 0; j < 6; j++) {
       const artist = artists[i * 6 + j];
       if (artist) {
-        // Функция для переноса длинного текста на несколько строк
+        // Разбиваем длинный текст на строки
         const words = artist.split(' ');
         let lines = [''];
         let currentLine = 0;
@@ -73,27 +75,33 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
         });
 
         // Отрисовка текста с переносом строк
+        const lineHeight = 20;
+        const totalHeight = lines.length * lineHeight;
+        const startY = (i + 0.5) * cellHeight - (totalHeight / 2);
+
         lines.forEach((line, lineIndex) => {
-          ctx.fillText(
-            line,
-            (j + 0.5) * (800/6),
-            (i + 0.5) * (800/6) + (lineIndex - lines.length/2 + 0.5) * 20,
-            cellWidth
-          );
+          const y = startY + (lineIndex * lineHeight);
+          // Добавляем белую обводку для лучшей читаемости
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 3;
+          ctx.strokeText(line, (j + 0.5) * (800/6), y, cellWidth);
+          // Отрисовываем сам текст
+          ctx.fillStyle = 'black';
+          ctx.fillText(line, (j + 0.5) * (800/6), y, cellWidth);
         });
       }
     }
   }
 
-  // Add card number with black background for better visibility
+  // Add card number with contrasting background
   ctx.fillStyle = 'black';
-  ctx.fillRect(10, 10, 80, 40);
+  ctx.fillRect(10, 10, 100, 50);
   ctx.fillStyle = 'white';
-  ctx.font = 'bold 24px Arial';
+  ctx.font = 'bold 32px Arial'; // Увеличиваем размер номера
   ctx.textAlign = 'left';
-  ctx.fillText(`#${cardNumber}`, 20, 35);
+  ctx.fillText(`#${cardNumber}`, 25, 45);
 
-  return canvas.toBuffer('image/jpeg');
+  return canvas.toBuffer('image/jpeg', { quality: 0.95 });
 }
 
 export function registerRoutes(app: Express): Server {
