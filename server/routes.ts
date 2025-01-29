@@ -123,7 +123,7 @@ export function registerRoutes(app: Express): Server {
   const httpServer = createServer(app);
 
   // Create WebSocket server
-  const wss = new WebSocketServer({ 
+  const wss = new WebSocketServer({
     server: httpServer,
     verifyClient: (info) => {
       // Skip Vite HMR WebSocket connections
@@ -211,13 +211,16 @@ export function registerRoutes(app: Express): Server {
       const cards = await db.select().from(bingoCards).where(eq(bingoCards.gameId, game.id));
       console.log('Found cards:', cards.length);
 
+      // Set headers before sending any data
       res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename=bingo-cards-game-${game.id}.zip`);
+      res.setHeader('Content-Disposition', `attachment; filename="bingo-cards-game-${game.id}.zip"`);
+      res.setHeader('Transfer-Encoding', 'chunked');
 
       const archive = archiver('zip', {
         zlib: { level: 9 }
       });
 
+      // Handle archive errors
       archive.on('error', (err) => {
         console.error('Archiver error:', err);
         if (!res.headersSent) {
@@ -240,6 +243,7 @@ export function registerRoutes(app: Express): Server {
         });
       });
 
+      // Pipe archive data to the response
       archive.pipe(res);
 
       // Generate and add card images to archive
