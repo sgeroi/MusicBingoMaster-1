@@ -193,23 +193,43 @@ export function registerRoutes(app: Express): Server {
 
   // Generate and download cards
   app.get("/api/games/:id/cards", async (req, res) => {
-    const game = await db.query.games.findFirst({
-      where: eq(games.id, parseInt(req.params.id)),
-    });
-    if (!game) return res.status(404).json({ message: "Game not found" });
+    try {
+      const game = await db.query.games.findFirst({
+        where: eq(games.id, parseInt(req.params.id)),
+      });
+      if (!game) return res.status(404).json({ message: "Game not found" });
 
-    const cards = await db.select().from(bingoCards).where(eq(bingoCards.gameId, game.id));
+      const cards = await db.select().from(bingoCards).where(eq(bingoCards.gameId, game.id));
 
-    const archive = archiver('zip');
-    res.attachment(`bingo-cards-game-${game.id}.zip`);
-    archive.pipe(res);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename=bingo-cards-game-${game.id}.zip`);
 
-    for (const card of cards) {
-      const imageBuffer = await generateCardImage(card.grid, card.cardNumber);
-      archive.append(imageBuffer, { name: `card-${card.cardNumber}.png` }); // Changed to .png
+      const archive = archiver('zip', {
+        zlib: { level: 9 } // Максимальная компрессия
+      });
+
+      // Отправляем архив в response
+      archive.pipe(res);
+
+      // Обработка ошибок архива
+      archive.on('error', (err) => {
+        throw err;
+      });
+
+      // Генерируем и добавляем карточки в архив
+      for (const card of cards) {
+        const imageBuffer = await generateCardImage(card.grid, card.cardNumber);
+        archive.append(imageBuffer, { name: `card-${card.cardNumber}.png` });
+      }
+
+      // Финализируем архив
+      await archive.finalize();
+    } catch (error) {
+      console.error('Error generating cards:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Error generating cards" });
+      }
     }
-
-    await archive.finalize();
   });
 
   // Get game statistics
