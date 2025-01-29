@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
 import { games, bingoCards, users } from "@db/schema";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { createCanvas, loadImage } from "canvas";
 import fs from "fs/promises";
 import path from "path";
@@ -227,10 +227,33 @@ export function registerRoutes(app: Express): Server {
   // Get all games for the logged-in user
   app.get("/api/games", requireAuth, async (req: AuthenticatedRequest, res) => {
     const userId = req.session.userId!;
-    const userGames = await db.query.games.findMany({
-      where: eq(games.userId, userId),
-      orderBy: (games, { desc }) => [desc(games.createdAt)],
-    });
+    const isAdmin = req.session.isAdmin;
+
+    let userGames;
+    if (isAdmin) {
+      // Admins can see all games
+      userGames = await db.query.games.findMany({
+        orderBy: (games, { desc }) => [desc(games.createdAt)],
+      });
+    } else {
+      // Regular users can see their own games and admin-created games
+      const adminUser = await db.query.users.findFirst({
+        where: eq(users.username, "admin")
+      });
+
+      if (!adminUser) {
+        return res.status(500).json({ message: "Admin user not found" });
+      }
+
+      userGames = await db.query.games.findMany({
+        where: (games, { or, eq }) => or(
+          eq(games.userId, userId),
+          eq(games.userId, adminUser.id)
+        ),
+        orderBy: (games, { desc }) => [desc(games.createdAt)],
+      });
+    }
+
     res.json(userGames);
   });
 
