@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Download } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 
 interface GameForm {
   name: string;
@@ -19,6 +19,8 @@ interface GameForm {
 
 export default function AdminPage() {
   const { toast } = useToast();
+  const [downloading, setDownloading] = useState<number | null>(null);
+
   const form = useForm<GameForm>({
     defaultValues: {
       hasHeart: false
@@ -33,9 +35,8 @@ export default function AdminPage() {
     mutationFn: async (data: GameForm) => {
       const formData = {
         ...data,
-        hasHeart: !!data.hasHeart, // Убедимся, что передаем булево значение
+        hasHeart: !!data.hasHeart,
       };
-      console.log("Sending form data:", formData); // Добавим лог
       const res = await fetch("/api/games", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -66,7 +67,37 @@ export default function AdminPage() {
   });
 
   const downloadCards = async (gameId: number) => {
-    window.location.href = `/api/games/${gameId}/cards`;
+    try {
+      setDownloading(gameId);
+      const response = await fetch(`/api/games/${gameId}/cards`);
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bingo-cards-game-${gameId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Success",
+        description: "Cards downloaded successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to download cards",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloading(null);
+    }
   };
 
   return (
@@ -155,9 +186,14 @@ export default function AdminPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => downloadCards(game.id)}
+                        disabled={downloading === game.id}
                       >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download Cards
+                        {downloading === game.id ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4 mr-2" />
+                        )}
+                        {downloading === game.id ? 'Downloading...' : 'Download Cards'}
                       </Button>
                     </TableCell>
                   </TableRow>
