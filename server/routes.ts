@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer } from 'ws';
 import { db } from "@db";
 import { games, bingoCards } from "@db/schema";
 import { eq } from "drizzle-orm";
@@ -8,7 +9,7 @@ import fs from "fs/promises";
 import path from "path";
 import archiver from "archiver";
 
-// Хранилище уже использованных комбинаций для текущей игры
+// Storage for used combinations in current game
 const usedCombinations = new Set<string>();
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -21,23 +22,18 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 function generateBingoCard(artists: string[], cardNumber: number, hasHeart: boolean): string[] {
-  // Генерируем уникальную комбинацию исполнителей
   let grid: string[];
   let gridKey: string;
 
   do {
     const shuffled = shuffleArray(artists);
     grid = shuffled.slice(0, 36);
-    gridKey = grid.sort().join(','); // Сортируем для правильного сравнения
+    gridKey = grid.sort().join(',');
   } while (usedCombinations.has(gridKey));
 
-  // Сохраняем использованную комбинацию
   usedCombinations.add(gridKey);
-
-  // Перемешиваем grid обратно, так как мы его отсортировали для сравнения
   grid = shuffleArray(grid);
 
-  // Если включена опция с сердечком, добавляем его к случайному исполнителю
   if (hasHeart) {
     const randomIndex = Math.floor(Math.random() * grid.length);
     grid[randomIndex] = `❤️ ${grid[randomIndex]} ❤️`;
@@ -49,7 +45,6 @@ function generateBingoCard(artists: string[], cardNumber: number, hasHeart: bool
 async function generateCardImage(artists: string[], cardNumber: number): Promise<Buffer> {
   const templatePath = path.join(process.cwd(), 'attached_assets', 'bez_kletok.png');
 
-  // Проверяем существование шаблона
   try {
     await fs.access(templatePath);
   } catch (error) {
@@ -57,27 +52,20 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
     throw new Error('Template file not found');
   }
 
-  // Загружаем шаблон
   const template = await loadImage(templatePath);
-  console.log('Template loaded, size:', template.width, 'x', template.height);
-
-  // Создаем canvas с размерами шаблона
   const canvas = createCanvas(template.width, template.height);
   const ctx = canvas.getContext('2d');
 
-  // Рисуем шаблон
   ctx.drawImage(template, 0, 0);
 
-  // Определяем размеры и положение сетки исполнителей
-  const gridStartX = template.width * 0.1; // 10% от левого края
-  const gridStartY = template.height * 0.25; // 25% от верхнего края
-  const gridWidth = template.width * 0.8; // 80% ширины
-  const gridHeight = template.height * 0.6; // 60% высоты
+  const gridStartX = template.width * 0.1;
+  const gridStartY = template.height * 0.25;
+  const gridWidth = template.width * 0.8;
+  const gridHeight = template.height * 0.6;
 
   const cellWidth = gridWidth / 6;
   const cellHeight = gridHeight / 6;
 
-  // Добавляем исполнителей
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -89,16 +77,15 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
         const cellCenterX = gridStartX + (j + 0.5) * cellWidth;
         const cellCenterY = gridStartY + (i + 0.5) * cellHeight;
 
-        // Разбиваем текст на строки если нужно
         const words = artist.split(' ');
         let lines = [''];
         let currentLine = 0;
 
-        ctx.font = 'bold 32px Arial'; // Увеличили размер шрифта с 16px до 32px
+        ctx.font = 'bold 32px Arial';
         words.forEach(word => {
           const testLine = lines[currentLine] + (lines[currentLine] ? ' ' : '') + word;
           const metrics = ctx.measureText(testLine);
-          if (metrics.width > cellWidth - 20) { // Увеличили отступ с 10 до 20 для большего шрифта
+          if (metrics.width > cellWidth - 20) {
             currentLine++;
             lines[currentLine] = word;
           } else {
@@ -106,18 +93,15 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
           }
         });
 
-        // Рисуем текст
-        const lineHeight = 36; // Увеличили высоту строки с 18 до 36
+        const lineHeight = 36;
         const totalHeight = lines.length * lineHeight;
         const textStartY = cellCenterY - (totalHeight / 2);
 
         lines.forEach((line, lineIndex) => {
           const y = textStartY + lineIndex * lineHeight;
-          // Белая обводка для лучшей читаемости
           ctx.strokeStyle = 'white';
-          ctx.lineWidth = 4; // Увеличили толщину обводки с 3 до 4 для лучшей читаемости
+          ctx.lineWidth = 4;
           ctx.strokeText(line, cellCenterX, y);
-          // Текст
           ctx.fillStyle = 'black';
           ctx.fillText(line, cellCenterX, y);
         });
@@ -125,7 +109,6 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
     }
   }
 
-  // Добавляем номер карточки
   ctx.font = 'bold 28px Arial';
   ctx.fillStyle = 'black';
   ctx.textAlign = 'center';
@@ -139,6 +122,24 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
 export function registerRoutes(app: Express): Server {
   const httpServer = createServer(app);
 
+  // Create WebSocket server
+  const wss = new WebSocketServer({ 
+    server: httpServer,
+    verifyClient: (info) => {
+      // Skip Vite HMR WebSocket connections
+      return info.req.headers['sec-websocket-protocol'] !== 'vite-hmr';
+    }
+  });
+
+  wss.on('connection', (ws) => {
+    ws.on('message', (message) => {
+      console.log('Received:', message);
+    });
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+  });
+
   // Create new game
   app.post("/api/games", async (req, res) => {
     const { name, cardCount, artists, hasHeart } = req.body;
@@ -149,7 +150,6 @@ export function registerRoutes(app: Express): Server {
       return res.status(400).json({ message: "Need at least 36 artists for a 6x6 grid" });
     }
 
-    // Очищаем Set с использованными комбинациями перед генерацией новой игры
     usedCombinations.clear();
 
     const [game] = await db.insert(games).values({
@@ -159,7 +159,6 @@ export function registerRoutes(app: Express): Server {
       hasHeart: !!hasHeart,
     }).returning();
 
-    // Generate bingo cards
     const cardsToInsert = [];
     for (let i = 1; i <= cardCount; i++) {
       const grid = generateBingoCard(artistList, i, !!hasHeart);
@@ -228,15 +227,40 @@ export function registerRoutes(app: Express): Server {
 
       archive.on('end', () => {
         console.log('Archive finalized successfully');
+        // Notify all clients that generation is complete
+        wss.clients.forEach(client => {
+          if (client.readyState === 1) { // WebSocket.OPEN is 1
+            client.send(JSON.stringify({
+              type: 'cardGeneration',
+              gameId: game.id,
+              progress: 100,
+              status: 'complete'
+            }));
+          }
+        });
       });
 
       archive.pipe(res);
 
       // Generate and add card images to archive
-      for (const card of cards) {
+      for (let i = 0; i < cards.length; i++) {
+        const card = cards[i];
         console.log('Generating image for card:', card.cardNumber);
         const imageBuffer = await generateCardImage(card.grid, card.cardNumber);
         archive.append(imageBuffer, { name: `card-${card.cardNumber}.png` });
+
+        // Calculate and broadcast progress
+        const progress = Math.round(((i + 1) / cards.length) * 100);
+        wss.clients.forEach(client => {
+          if (client.readyState === 1) { // WebSocket.OPEN is 1
+            client.send(JSON.stringify({
+              type: 'cardGeneration',
+              gameId: game.id,
+              progress,
+              status: 'generating'
+            }));
+          }
+        });
       }
 
       console.log('Finalizing archive...');
@@ -245,6 +269,18 @@ export function registerRoutes(app: Express): Server {
 
     } catch (error) {
       console.error('Error downloading cards:', error);
+      // Notify clients about error
+      wss.clients.forEach(client => {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({
+            type: 'cardGeneration',
+            gameId: parseInt(req.params.id),
+            status: 'error',
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }));
+        }
+      });
+
       if (!res.headersSent) {
         res.status(500).json({
           message: "Error downloading cards",
@@ -264,11 +300,9 @@ export function registerRoutes(app: Express): Server {
 
     const cards = await db.select().from(bingoCards).where(eq(bingoCards.gameId, game.id));
 
-    // Информация по каждой карточке
     const cardStats = cards
-      .filter(card => !excludedCards.includes(card.cardNumber)) // Исключаем карточки
+      .filter(card => !excludedCards.includes(card.cardNumber))
       .map(card => {
-        // Очищаем имена исполнителей от эмодзи сердечка для сравнения
         const cleanGrid = card.grid.map(artist =>
           artist.replace(/❤️ /g, '').replace(/ ❤️/g, '')
         );
@@ -280,7 +314,6 @@ export function registerRoutes(app: Express): Server {
         };
       });
 
-    // Сортируем карточки по количеству оставшихся исполнителей
     cardStats.sort((a, b) => a.remainingCount - b.remainingCount);
 
     const stats = {

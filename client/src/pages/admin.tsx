@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Download, Loader2 } from "lucide-react";
@@ -17,9 +18,18 @@ interface GameForm {
   hasHeart: boolean;
 }
 
+interface GenerationProgress {
+  gameId: number;
+  progress: number;
+  status: 'generating' | 'complete' | 'error';
+  error?: string;
+}
+
 export default function AdminPage() {
   const { toast } = useToast();
   const [downloading, setDownloading] = useState<number | null>(null);
+  const [progress, setProgress] = useState<GenerationProgress | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const form = useForm<GameForm>({
     defaultValues: {
@@ -30,6 +40,48 @@ export default function AdminPage() {
   const { data: games, refetch } = useQuery({
     queryKey: ["/api/games"],
   });
+
+  // Setup WebSocket connection
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'cardGeneration') {
+        if (data.status === 'error') {
+          toast({
+            title: "Error",
+            description: data.error,
+            variant: "destructive",
+          });
+          setProgress(null);
+          setDownloading(null);
+        } else {
+          setProgress({
+            gameId: data.gameId,
+            progress: data.progress,
+            status: data.status,
+          });
+          if (data.status === 'complete') {
+            setTimeout(() => {
+              setProgress(null);
+              setDownloading(null);
+            }, 1000);
+          }
+        }
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [toast]);
 
   const createGame = useMutation({
     mutationFn: async (data: GameForm) => {
@@ -85,24 +137,21 @@ export default function AdminPage() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      toast({
-        title: "Success",
-        description: "Cards downloaded successfully",
-      });
     } catch (error) {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to download cards",
         variant: "destructive",
       });
-    } finally {
       setDownloading(null);
+      setProgress(null);
     }
   };
 
   return (
     <div className="container mx-auto py-8">
       <div className="grid gap-8">
+        {/* Create Game Form - remains unchanged */}
         <Card>
           <CardHeader>
             <CardTitle>Create New Bingo Game</CardTitle>
@@ -157,6 +206,7 @@ export default function AdminPage() {
           </CardContent>
         </Card>
 
+        {/* Games List */}
         <Card>
           <CardHeader>
             <CardTitle>Games List</CardTitle>
@@ -182,19 +232,30 @@ export default function AdminPage() {
                       {new Date(game.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => downloadCards(game.id)}
-                        disabled={downloading === game.id}
-                      >
-                        {downloading === game.id ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Download className="w-4 h-4 mr-2" />
+                      <div className="space-y-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => downloadCards(game.id)}
+                          disabled={downloading === game.id}
+                          className="w-full"
+                        >
+                          {downloading === game.id ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4 mr-2" />
+                          )}
+                          {downloading === game.id ? 'Generating...' : 'Download Cards'}
+                        </Button>
+                        {progress && progress.gameId === game.id && (
+                          <div className="space-y-1">
+                            <Progress value={progress.progress} className="h-2" />
+                            <p className="text-sm text-muted-foreground text-center">
+                              {progress.progress}% complete
+                            </p>
+                          </div>
                         )}
-                        {downloading === game.id ? 'Downloading...' : 'Download Cards'}
-                      </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
