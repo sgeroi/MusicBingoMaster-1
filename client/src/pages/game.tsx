@@ -6,16 +6,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { GameStats } from "@/components/game-stats";
 import { ArtistGrid } from "@/components/artist-grid";
 
+interface Game {
+  id: number;
+  name: string;
+  cardCount: number;
+  artists: string[];
+  status: string;
+  createdAt: string;
+}
+
 export default function GamePage() {
   const [selectedGame, setSelectedGame] = useState<string>();
   const [selectedArtists, setSelectedArtists] = useState<string[]>([]);
   const [gameStarted, setGameStarted] = useState(false);
 
-  const { data: games } = useQuery({
+  const { data: games } = useQuery<Game[]>({
     queryKey: ["/api/games"],
   });
 
-  const { data: currentGame } = useQuery({
+  const { data: currentGame } = useQuery<Game>({
     queryKey: ["/api/games", selectedGame],
     enabled: !!selectedGame,
   });
@@ -37,12 +46,12 @@ export default function GamePage() {
       const newSelection = prev.includes(artist)
         ? prev.filter((a) => a !== artist)
         : [...prev, artist];
-      
+
       // Update stats after selection changes
       if (selectedGame) {
         updateStats();
       }
-      
+
       return newSelection;
     });
   };
@@ -73,7 +82,7 @@ export default function GamePage() {
                   <SelectValue placeholder="Select a game" />
                 </SelectTrigger>
                 <SelectContent>
-                  {games?.map((game: any) => (
+                  {games?.map((game) => (
                     <SelectItem key={game.id} value={String(game.id)}>
                       {game.name}
                     </SelectItem>
@@ -93,7 +102,7 @@ export default function GamePage() {
         {selectedGame && gameStarted && currentGame && (
           <>
             {gameStats && <GameStats stats={gameStats} />}
-            
+
             <Card>
               <CardHeader>
                 <CardTitle>Select Called Artists</CardTitle>

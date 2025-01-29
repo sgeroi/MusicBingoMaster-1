@@ -93,13 +93,13 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
     }
   }
 
-  // Add card number with contrasting background
-  ctx.fillStyle = 'black';
-  ctx.fillRect(10, 10, 100, 50);
+  // Add card number in the corner with subtle background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+  ctx.fillRect(5, 5, 45, 25);
   ctx.fillStyle = 'white';
-  ctx.font = 'bold 32px Arial'; // Увеличиваем размер номера
-  ctx.textAlign = 'left';
-  ctx.fillText(`#${cardNumber}`, 25, 45);
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`#${cardNumber}`, 27, 22);
 
   return canvas.toBuffer('image/jpeg', { quality: 0.95 });
 }
