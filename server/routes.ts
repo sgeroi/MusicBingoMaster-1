@@ -205,22 +205,17 @@ export function registerRoutes(app: Express): Server {
     cardStats.sort((a, b) => a.remainingCount - b.remainingCount);
 
     const stats = {
-      // Карточки, близкие к победе (5 или меньше оставшихся)
-      closeToWin: cardStats
-        .filter(stat => stat.remainingCount <= 5 && stat.remainingCount > 0)
-        .map(stat => ({
-          cardNumber: stat.cardNumber,
-          remaining: stat.remainingCount
-        })),
+      // Все карточки с количеством оставшихся исполнителей
+      cards: cardStats.map(stat => ({
+        cardNumber: stat.cardNumber,
+        remaining: stat.remainingCount
+      })),
       // Победители (все исполнители зачеркнуты)
       winners: cardStats
         .filter(stat => stat.isComplete)
         .map(stat => stat.cardNumber),
       // Общая статистика
-      totalCards: cards.length,
-      averageRemaining: Math.round(
-        cardStats.reduce((sum, stat) => sum + stat.remainingCount, 0) / cards.length
-      )
+      totalCards: cards.length
     };
 
     res.json(stats);
