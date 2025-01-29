@@ -26,6 +26,7 @@ function generateBingoCard(artists: string[], cardNumber: number, hasHeart: bool
   if (hasHeart) {
     const randomIndex = Math.floor(Math.random() * grid.length);
     grid[randomIndex] = `❤️ ${grid[randomIndex]}`;
+    console.log(`Card ${cardNumber}: Added heart to artist at index ${randomIndex}: ${grid[randomIndex]}`);
   }
 
   return grid;
@@ -118,6 +119,8 @@ export function registerRoutes(app: Express): Server {
   // Create new game
   app.post("/api/games", async (req, res) => {
     const { name, cardCount, artists, hasHeart } = req.body;
+    console.log("Creating new game with hasHeart:", hasHeart);
+
     const artistList = artists.split('\n').map((a: string) => a.trim()).filter(Boolean);
 
     if (artistList.length < 36) {
