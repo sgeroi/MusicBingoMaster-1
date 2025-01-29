@@ -94,11 +94,11 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
         let lines = [''];
         let currentLine = 0;
 
-        ctx.font = 'bold 32px Arial'; // Увеличили размер шрифта с 16px до 32px
+        ctx.font = 'bold 64px Arial'; // Увеличили размер шрифта с 32px до 64px
         words.forEach(word => {
           const testLine = lines[currentLine] + (lines[currentLine] ? ' ' : '') + word;
           const metrics = ctx.measureText(testLine);
-          if (metrics.width > cellWidth - 20) { // Увеличили отступ с 10 до 20 для большего шрифта
+          if (metrics.width > cellWidth - 40) { // Увеличили отступ с 20 до 40 для большего шрифта
             currentLine++;
             lines[currentLine] = word;
           } else {
@@ -107,7 +107,7 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
         });
 
         // Рисуем текст
-        const lineHeight = 36; // Увеличили высоту строки с 18 до 36
+        const lineHeight = 72; // Увеличили высоту строки с 36 до 72
         const totalHeight = lines.length * lineHeight;
         const textStartY = cellCenterY - (totalHeight / 2);
 
@@ -115,7 +115,7 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
           const y = textStartY + lineIndex * lineHeight;
           // Белая обводка для лучшей читаемости
           ctx.strokeStyle = 'white';
-          ctx.lineWidth = 4; // Увеличили толщину обводки с 3 до 4 для лучшей читаемости
+          ctx.lineWidth = 8; // Увеличили толщину обводки с 4 до 8 для лучшей читаемости
           ctx.strokeText(line, cellCenterX, y);
           // Текст
           ctx.fillStyle = 'black';
