@@ -8,8 +8,8 @@ interface ArtistGridProps {
   onArtistClick: (artist: string) => void;
 }
 
-export function ArtistGrid({ artists, selectedArtists, onArtistClick }: ArtistGridProps) {
-  const sortedArtists = [...artists].sort();
+export function ArtistGrid({ artists = [], selectedArtists, onArtistClick }: ArtistGridProps) {
+  const sortedArtists = [...(artists || [])].sort();
 
   return (
     <ScrollArea className="h-[600px] w-full rounded-md border p-4">
