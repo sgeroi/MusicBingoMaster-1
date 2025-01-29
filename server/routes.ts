@@ -46,6 +46,48 @@ function generateBingoCard(artists: string[], cardNumber: number, hasHeart: bool
   return { grid, heartPosition };
 }
 
+// Add these helper functions after the existing helper functions
+function checkLine(grid: string[], selectedArtists: string[], start: number, step: number, length: number): boolean {
+  for (let i = 0; i < length; i++) {
+    const position = start + (step * i);
+    const artist = grid[position].replace(/❤️ /g, '').replace(/ ❤️/g, '');
+    if (!selectedArtists.includes(artist)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function countLines(grid: string[], selectedArtists: string[]): number {
+  let lines = 0;
+
+  // Check horizontal lines
+  for (let row = 0; row < 6; row++) {
+    if (checkLine(grid, selectedArtists, row * 6, 1, 6)) {
+      lines++;
+    }
+  }
+
+  // Check vertical lines
+  for (let col = 0; col < 6; col++) {
+    if (checkLine(grid, selectedArtists, col, 6, 6)) {
+      lines++;
+    }
+  }
+
+  // Check diagonal from top-left to bottom-right
+  if (checkLine(grid, selectedArtists, 0, 7, 6)) {
+    lines++;
+  }
+
+  // Check diagonal from top-right to bottom-left
+  if (checkLine(grid, selectedArtists, 5, 5, 6)) {
+    lines++;
+  }
+
+  return lines;
+}
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: async function (req, file, cb) {
@@ -420,23 +462,44 @@ export function registerRoutes(app: Express): Server {
           artist.replace(/❤️ /g, '').replace(/ ❤️/g, '')
         );
         const remaining = cleanGrid.filter(artist => !selectedArtists.includes(artist)).length;
+        const completedLines = countLines(cleanGrid, selectedArtists);
+
         return {
           cardNumber: card.cardNumber,
           remainingCount: remaining,
-          isComplete: remaining === 0
+          isComplete: remaining === 0,
+          completedLines,
+          grid: cleanGrid,
+          crossedOut: cleanGrid.map(artist => selectedArtists.includes(artist))
         };
       });
 
-    cardStats.sort((a, b) => a.remainingCount - b.remainingCount);
+    cardStats.sort((a, b) => {
+      // Sort first by completed lines (descending)
+      if (b.completedLines !== a.completedLines) {
+        return b.completedLines - a.completedLines;
+      }
+      // Then by remaining count (ascending)
+      return a.remainingCount - b.remainingCount;
+    });
 
     const stats = {
       cards: cardStats.map(stat => ({
         cardNumber: stat.cardNumber,
-        remaining: stat.remainingCount
+        remaining: stat.remainingCount,
+        completedLines: stat.completedLines,
+        grid: stat.grid,
+        crossedOut: stat.crossedOut
       })),
       winners: cardStats
         .filter(stat => stat.isComplete)
         .map(stat => stat.cardNumber),
+      lineWinners: cardStats
+        .filter(stat => stat.completedLines > 0)
+        .map(stat => ({
+          cardNumber: stat.cardNumber,
+          lines: stat.completedLines
+        })),
       totalCards: cardStats.length
     };
 
