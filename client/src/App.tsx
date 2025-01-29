@@ -7,6 +7,7 @@ import AdminPage from "@/pages/admin";
 import GamePage from "@/pages/game";
 import LoginPage from "@/pages/login";
 import UsersPage from "@/pages/users";
+import CreateBingoPage from "@/pages/create-bingo";
 import { Button } from "@/components/ui/button";
 import { useAuth, logout } from "@/lib/auth";
 
@@ -38,7 +39,7 @@ function Navigation() {
   return (
     <div className="border-b mb-4">
       <div className="container mx-auto py-4 flex gap-4">
-        {user.isAdmin && (
+        {user.isAdmin ? (
           <>
             <Button
               variant={location === "/admin" ? "default" : "outline"}
@@ -53,6 +54,13 @@ function Navigation() {
               Users
             </Button>
           </>
+        ) : (
+          <Button
+            variant={location === "/create" ? "default" : "outline"}
+            onClick={() => navigate("/create")}
+          >
+            Create Bingo
+          </Button>
         )}
         <Button
           variant={location === "/" ? "default" : "outline"}
@@ -83,6 +91,9 @@ function Router() {
         )} />
         <Route path="/users" component={(props) => (
           <ProtectedRoute component={UsersPage} adminOnly {...props} />
+        )} />
+        <Route path="/create" component={(props) => (
+          <ProtectedRoute component={CreateBingoPage} {...props} />
         )} />
         <Route path="/" component={(props) => (
           <ProtectedRoute component={GamePage} {...props} />
