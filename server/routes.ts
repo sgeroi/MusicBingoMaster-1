@@ -46,45 +46,26 @@ async function generateCardImage(artists: string[], cardNumber: number, heartPos
     ctx.stroke();
   }
 
-  // Add artists
-  ctx.fillStyle = 'black';
-  ctx.font = 'bold 16px Arial';
+  // Add artists and hearts
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-
-  const cellWidth = 800/6 - 20;
-  const cellHeight = 800/6;
 
   for (let i = 0; i < 6; i++) {
     for (let j = 0; j < 6; j++) {
       const index = i * 6 + j;
       const artist = artists[index];
       if (artist) {
-        // Если это позиция для сердечка, рисуем его
+        const cellCenterX = (j + 0.5) * (800/6);
+        const cellCenterY = (i + 0.5) * (800/6);
+
+        // Draw heart emoji if this is the selected position
         if (heartPosition === index) {
-          const cellCenterX = (j + 0.5) * (800/6);
-          const cellCenterY = (i + 0.5) * (800/6);
-
-          ctx.fillStyle = 'red';
-          ctx.beginPath();
-
-          // Увеличенное сердечко в центре ячейки
-          const heartSize = 30; // Увеличиваем размер сердечка
-          ctx.moveTo(cellCenterX, cellCenterY + heartSize/2);
-          ctx.bezierCurveTo(
-            cellCenterX - heartSize/2, cellCenterY, 
-            cellCenterX - heartSize/2, cellCenterY - heartSize/2, 
-            cellCenterX, cellCenterY - heartSize/2
-          );
-          ctx.bezierCurveTo(
-            cellCenterX + heartSize/2, cellCenterY - heartSize/2, 
-            cellCenterX + heartSize/2, cellCenterY, 
-            cellCenterX, cellCenterY + heartSize/2
-          );
-          ctx.fill();
-          ctx.fillStyle = 'black'; // Возвращаем черный цвет для текста
+          ctx.font = '24px Arial';
+          ctx.fillText('❤️', cellCenterX, cellCenterY - 15);
         }
 
+        // Draw artist name
+        ctx.font = '16px Arial';
         // Разбиваем длинный текст на строки
         const words = artist.split(' ');
         let lines = [''];
@@ -93,7 +74,7 @@ async function generateCardImage(artists: string[], cardNumber: number, heartPos
         words.forEach(word => {
           const testLine = lines[currentLine] + (lines[currentLine] ? ' ' : '') + word;
           const metrics = ctx.measureText(testLine);
-          if (metrics.width > cellWidth) {
+          if (metrics.width > 800/6 - 20) {
             currentLine++;
             lines[currentLine] = word;
           } else {
@@ -101,20 +82,18 @@ async function generateCardImage(artists: string[], cardNumber: number, heartPos
           }
         });
 
-        // Отрисовка текста с переносом строк
+        // Draw text lines
         const lineHeight = 20;
         const totalHeight = lines.length * lineHeight;
-        const startY = (i + 0.5) * cellHeight - (totalHeight / 2);
+        const startY = cellCenterY + (heartPosition === index ? 10 : 0); // Adjust Y if there's a heart
 
         lines.forEach((line, lineIndex) => {
-          const y = startY + (lineIndex * lineHeight);
-          // Добавляем белую обводку для лучшей читаемости
+          const y = startY + (lineIndex * lineHeight) - (totalHeight / 2);
           ctx.strokeStyle = 'white';
           ctx.lineWidth = 3;
-          ctx.strokeText(line, (j + 0.5) * (800/6), y, cellWidth);
-          // Отрисовываем сам текст
+          ctx.strokeText(line, cellCenterX, y);
           ctx.fillStyle = 'black';
-          ctx.fillText(line, (j + 0.5) * (800/6), y, cellWidth);
+          ctx.fillText(line, cellCenterX, y);
         });
       }
     }
@@ -213,7 +192,7 @@ export function registerRoutes(app: Express): Server {
 
   // Get game statistics
   app.post("/api/games/:id/stats", async (req, res) => {
-    const { selectedArtists } = req.body;
+    const { selectedArtists, excludedCards = [] } = req.body;
     const game = await db.query.games.findFirst({
       where: eq(games.id, parseInt(req.params.id)),
     });
@@ -222,14 +201,16 @@ export function registerRoutes(app: Express): Server {
     const cards = await db.select().from(bingoCards).where(eq(bingoCards.gameId, game.id));
 
     // Информация по каждой карточке
-    const cardStats = cards.map(card => {
-      const remaining = card.grid.filter(artist => !selectedArtists.includes(artist)).length;
-      return {
-        cardNumber: card.cardNumber,
-        remainingCount: remaining,
-        isComplete: remaining === 0
-      };
-    });
+    const cardStats = cards
+      .filter(card => !excludedCards.includes(card.cardNumber)) // Исключаем карточки
+      .map(card => {
+        const remaining = card.grid.filter(artist => !selectedArtists.includes(artist)).length;
+        return {
+          cardNumber: card.cardNumber,
+          remainingCount: remaining,
+          isComplete: remaining === 0
+        };
+      });
 
     // Сортируем карточки по количеству оставшихся исполнителей
     cardStats.sort((a, b) => a.remainingCount - b.remainingCount);
@@ -245,7 +226,7 @@ export function registerRoutes(app: Express): Server {
         .filter(stat => stat.isComplete)
         .map(stat => stat.cardNumber),
       // Общая статистика
-      totalCards: cards.length
+      totalCards: cardStats.length
     };
 
     res.json(stats);

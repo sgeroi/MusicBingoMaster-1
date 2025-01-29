@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { GameStats } from "@/components/game-stats";
 import { ArtistGrid } from "@/components/artist-grid";
 
@@ -19,6 +20,7 @@ export default function GamePage() {
   const [selectedGame, setSelectedGame] = useState<string>();
   const [selectedArtists, setSelectedArtists] = useState<string[]>([]);
   const [gameStarted, setGameStarted] = useState(false);
+  const [excludedCards, setExcludedCards] = useState<string>("");
 
   const { data: games } = useQuery<Game[]>({
     queryKey: ["/api/games"],
@@ -34,7 +36,10 @@ export default function GamePage() {
       const res = await fetch(`/api/games/${selectedGame}/stats`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ selectedArtists }),
+        body: JSON.stringify({ 
+          selectedArtists,
+          excludedCards: excludedCards.split(",").map(n => parseInt(n.trim())).filter(n => !isNaN(n))
+        }),
       });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
@@ -56,17 +61,18 @@ export default function GamePage() {
     });
   };
 
-  const startGame = () => {
-    setSelectedArtists([]);
-    setGameStarted(true);
+  const handleExcludedCardsChange = (value: string) => {
+    setExcludedCards(value);
+    if (selectedGame) {
+      updateStats();
+    }
   };
 
-  // Debugging log
-  useEffect(() => {
-    if (currentGame) {
-      console.log("Current game data:", currentGame);
-    }
-  }, [currentGame]);
+  const startGame = () => {
+    setSelectedArtists([]);
+    setExcludedCards("");
+    setGameStarted(true);
+  };
 
   return (
     <div className="container mx-auto py-8">
@@ -83,6 +89,7 @@ export default function GamePage() {
                   setSelectedGame(value);
                   setGameStarted(false);
                   setSelectedArtists([]);
+                  setExcludedCards("");
                 }}
               >
                 <SelectTrigger className="w-[300px]">
@@ -108,6 +115,26 @@ export default function GamePage() {
 
         {selectedGame && gameStarted && currentGame && (
           <>
+            <Card>
+              <CardHeader>
+                <CardTitle>Game Settings</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      Exclude Cards (comma-separated numbers)
+                    </label>
+                    <Input
+                      placeholder="e.g. 1, 4, 7"
+                      value={excludedCards}
+                      onChange={(e) => handleExcludedCardsChange(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {gameStats && <GameStats stats={gameStats} />}
 
             <Card>
