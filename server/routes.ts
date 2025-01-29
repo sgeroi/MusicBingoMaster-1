@@ -120,11 +120,12 @@ async function generateCardImage(artists: string[], cardNumber: number): Promise
   ctx.font = 'bold 28px Arial';
   ctx.fillStyle = 'black';
   ctx.textAlign = 'center';
-  const numberX = template.width * 0.85; // Позиция номера справа вверху
+  const numberX = template.width * 0.85;
   const numberY = template.height * 0.12;
   ctx.fillText(`${cardNumber}`, numberX, numberY);
 
-  return canvas.toBuffer('image/png', { quality: 1 });
+  // Возвращаем буфер с изображением
+  return canvas.toBuffer();
 }
 
 export function registerRoutes(app: Express): Server {
@@ -205,7 +206,7 @@ export function registerRoutes(app: Express): Server {
 
     for (const card of cards) {
       const imageBuffer = await generateCardImage(card.grid, card.cardNumber);
-      archive.append(imageBuffer, { name: `card-${card.cardNumber}.jpg` });
+      archive.append(imageBuffer, { name: `card-${card.cardNumber}.png` }); // Changed to .png
     }
 
     await archive.finalize();
